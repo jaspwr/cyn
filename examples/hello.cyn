@@ -1,0 +1,9 @@
+# This is the first cyn program.
+
+$h = ((2 + 2) * $double 2) # prints 8
+$double $x = $x * 2
+
+$add $a $b = 
+	$a + $b
+
+main = echo (1 + 1)
