@@ -50,6 +50,10 @@ fn definition_list(mut ts: Tokens) -> Option<(Tokens, Ast)> {
         return None;
     }
 
+    if nodes.len() == 1 {
+        return Some((ts, nodes.pop().unwrap()));
+    }
+
     return Some((ts, Node::DefinitionList(nodes)));
 }
 
@@ -263,7 +267,7 @@ fn peek<'source>(ts: &'source Tokens) -> Option<&'source Token<'source>> {
 fn peek_and_compare<'source>(ts: &'source Tokens, token: &str) -> bool {
     peek(ts)
         .map(|t| {
-            println!("{} == {}", t.token, token);
+            // println!("{} == {}", t.token, token);
             t.token == token
         })
         .unwrap_or(false)

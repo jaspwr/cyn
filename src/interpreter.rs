@@ -118,7 +118,7 @@ pub enum Value {
 }
 
 impl Value {
-    fn as_string(&self) -> Result<String, RuntimeError> {
+    pub fn as_string(&self) -> Result<String, RuntimeError> {
         Ok(match self {
             Value::Void => return rte("Cannot convert void to string"),
             Value::String(s) => s.clone(),

@@ -23,6 +23,7 @@ enum CharCategory {
     Operator,
     Bracket,
     Whitespace,
+    StringLiteral,
 }
 
 fn categorize_char(c: char) -> CharCategory {
@@ -54,16 +55,26 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
     let mut in_comment = false;
 
     let mut append = |i: usize, last_category: CharCategory| {
+        if last_category == CharCategory::StringLiteral {
+            token_start += 1;
+        }
+
         let token = &source[token_start..i];
 
         let kind = match last_category {
-            CharCategory::AlphaNum => Some(TokenKind::Indentifier),
+            CharCategory::AlphaNum | CharCategory::StringLiteral => Some(TokenKind::Indentifier),
             CharCategory::Operator => Some(TokenKind::Operator),
             CharCategory::Bracket => Some(TokenKind::Bracket),
             CharCategory::Whitespace => None,
             CharCategory::EndExpression => Some(TokenKind::ExpressionTerminator),
             CharCategory::None => None,
         };
+
+        if kind == Some(TokenKind::ExpressionTerminator) {
+            if token.is_empty() {
+                return;
+            }
+        }
 
         if let Some(mut kind) = kind {
             match token {
@@ -84,6 +95,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
     let mut indentation = 0;
     let mut last_indentation = 0;
     let mut counting_indentation = true;
+    let mut in_string_literal = false;
 
     for (i, c) in source.chars().enumerate() {
         if in_comment {
@@ -106,6 +118,21 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         if c == '\n' || c == '\r' {
             indentation = 0;
             counting_indentation = true;
+        }
+
+        if c == '"' {
+            if in_string_literal {
+                last_category = CharCategory::StringLiteral;
+            }
+
+            in_string_literal = !in_string_literal;
+            append(i, last_category);
+            last_category = CharCategory::None;
+            continue;
+        }
+
+        if in_string_literal {
+            continue;
         }
 
         if counting_indentation {
@@ -132,6 +159,8 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         append(i, last_category);
         last_category = category;
     }
+
+    append(source.len(), last_category);
 
     tokens
 }

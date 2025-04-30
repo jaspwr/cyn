@@ -6,4 +6,4 @@ $double $x = $x * 2
 $add $a $b = 
 	$a + $b
 
-main = echo (1 + 1)
+main = ls "-a"

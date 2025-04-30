@@ -1,8 +1,12 @@
 use std::env;
 
+use interactive::start_interactive;
+
 pub mod tokenizer;
 pub mod grammar;
 pub mod interpreter;
+pub mod interactive;
+pub mod utils;
 
 fn main() {
     if env::args().len() == 2 {
@@ -25,4 +29,7 @@ fn main() {
             println!("result: {:#?}", result);
         }
     }
+
+    
+    let _ = start_interactive();
 }
