@@ -28,7 +28,7 @@ enum CharCategory {
 
 fn categorize_char(c: char) -> CharCategory {
     match c {
-        '+' | '-' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | '~' | 'λ' | '>' | '<' | '@'
+        '+' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | '~' | 'λ' | '>' | '<' | '@'
         | '.' | ',' | '?' | ':' | ';' => {
             return CharCategory::Operator;
         }
@@ -38,7 +38,7 @@ fn categorize_char(c: char) -> CharCategory {
         _ => {}
     }
 
-    if c.is_alphanumeric() || c == '_' || c == '$' {
+    if c.is_alphanumeric() || c == '_' || c == '$' || c == '-' {
         return CharCategory::AlphaNum;
     } else if c.is_whitespace() {
         return CharCategory::Whitespace;
@@ -80,6 +80,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         if let Some(mut kind) = kind {
             match token {
                 "where" => kind = TokenKind::Keyword,
+                "-" => kind = TokenKind::Operator, // minus is allowed in identifiers
                 _ => {}
             };
 

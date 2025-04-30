@@ -18,8 +18,24 @@ struct Function {
     owner: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ExecutionContext {
+    pub piped: bool,
+}
+
+impl ExecutionContext {
+    pub fn new() -> Self {
+        Self { piped: false }
+    }
+}
+
 impl Function {
-    fn eval(&self, args: Vec<Value>, state: &mut ExecutionState) -> Result<Value, RuntimeError> {
+    fn eval(
+        &self,
+        args: Vec<Value>,
+        state: &mut ExecutionState,
+        ctx: ExecutionContext,
+    ) -> Result<Value, RuntimeError> {
         if self.args.len() > args.len() {
             // Curry!
 
@@ -42,7 +58,7 @@ impl Function {
             state.constants.insert(arg.clone(), value.clone());
         }
 
-        let mut ret = eval(*self.body.clone(), state).map_err(|e| {
+        let mut ret = eval(*self.body.clone(), state, ctx).map_err(|e| {
             let mut new_e = e.clone();
             new_e.callstack.push(self.name.clone());
             new_e
@@ -53,7 +69,7 @@ impl Function {
         let leftover = args.iter().skip(self.args.len()).collect::<Vec<_>>();
 
         if !leftover.is_empty() {
-            ret = eval_lambda(state, ret, leftover)?;
+            ret = eval_lambda(ret, leftover, state, ctx)?;
         }
 
         Ok(ret)
@@ -61,9 +77,10 @@ impl Function {
 }
 
 fn eval_lambda(
-    state: &mut ExecutionState,
     lambda: Value,
     leftover: Vec<&Value>,
+    state: &mut ExecutionState,
+    ctx: ExecutionContext,
 ) -> Result<Value, RuntimeError> {
     if let Value::Lambda {
         args,
@@ -79,8 +96,8 @@ fn eval_lambda(
 
         state.constants.extend(captured);
 
-        let body_string =  body.stringify();
-        let ret = eval(*body, state).map_err(|e| {
+        let body_string = body.stringify();
+        let ret = eval(*body, state, ctx).map_err(|e| {
             let mut new_e = e.clone();
             new_e.callstack.push(body_string.clone());
             new_e
@@ -94,24 +111,38 @@ fn eval_lambda(
     }
 }
 
-fn eval_as_command(name: String, args: Vec<Value>) -> Result<Value, RuntimeError> {
-    let cmd = Command::new(&name)
-        .args(
-            args.iter()
-                .map(|arg| arg.as_string())
-                .collect::<Result<Vec<_>, _>>()?,
-        )
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn();
+fn eval_as_command(
+    name: String,
+    args: Vec<Value>,
+    ctx: ExecutionContext,
+) -> Result<Value, RuntimeError> {
+    let mut cmd = Command::new(&name);
+
+    cmd.args(
+        args.iter()
+            .map(|arg| arg.as_string())
+            .collect::<Result<Vec<_>, _>>()?,
+    );
+
+    if ctx.piped {
+        cmd.stdin(std::process::Stdio::piped());
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+    } else {
+        cmd.stdin(std::process::Stdio::inherit());
+        cmd.stdout(std::process::Stdio::inherit());
+        cmd.stderr(std::process::Stdio::inherit());
+    }
+
+    let cmd = cmd.spawn();
 
     if let Err(e) = cmd {
         return rte(format!("Failed to execute command {}: {}", name, e));
     }
 
     let mut child = cmd.unwrap();
-    let stdin = child.stdin.as_mut().unwrap();
+
+    // let stdin = child.stdin.as_mut().unwrap();
 
     // if let Some(input) = piped_input {
     //     stdin.write_all(input.as_bytes()).await.unwrap();
@@ -147,7 +178,8 @@ impl ExecutionState {
 
     pub fn run_main(&mut self, args: Vec<String>) -> Result<Value, RuntimeError> {
         if let Some(main) = self.functions.get("main").cloned() {
-            main.eval(vec![], self)
+            let ctx = ExecutionContext::new();
+            main.eval(vec![], self, ctx)
         } else {
             return rte("No main function defined");
         }
@@ -210,7 +242,11 @@ fn rte<T>(message: impl ToString) -> Result<T, RuntimeError> {
     })
 }
 
-pub fn eval(node: Node, state: &mut ExecutionState) -> Result<Value, RuntimeError> {
+pub fn eval(
+    node: Node,
+    state: &mut ExecutionState,
+    ctx: ExecutionContext,
+) -> Result<Value, RuntimeError> {
     Ok(match node {
         Node::String(s) => Value::String(s),
         Node::Indentifier(s) => {
@@ -219,45 +255,49 @@ pub fn eval(node: Node, state: &mut ExecutionState) -> Result<Value, RuntimeErro
             }
 
             if let Some(function) = state.functions.get(&s).cloned() {
-                return function.eval(vec![], state);
+                return function.eval(vec![], state, ExecutionContext { piped: true, ..ctx });
             }
 
             // return rte(format!("Undefined identifier: {}", s));
 
-            return eval_as_command(s, vec![]);
+            return eval_as_command(s, vec![], ctx);
         }
         Node::DoubleLiteral(d) => Value::Double(d),
-        Node::BinaryOperation(oper, a, b) => match oper {
-            crate::grammar::BinaryOperation::Add => {
-                let a = eval(*a, state)?.as_double()?;
-                let b = eval(*b, state)?.as_double()?;
-                Value::Double(a + b)
+        Node::BinaryOperation(oper, a, b) => {
+            let ctx = ExecutionContext { piped: true, ..ctx };
+
+            match oper {
+                crate::grammar::BinaryOperation::Add => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Double(a + b)
+                }
+                crate::grammar::BinaryOperation::Sub => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Double(a - b)
+                }
+                crate::grammar::BinaryOperation::Mul => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Double(a * b)
+                }
+                crate::grammar::BinaryOperation::Div => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Double(a / b)
+                }
+                crate::grammar::BinaryOperation::Pow => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Double(a.powf(b))
+                }
+                crate::grammar::BinaryOperation::Custon(_) => todo!(),
             }
-            crate::grammar::BinaryOperation::Sub => {
-                let a = eval(*a, state)?.as_double()?;
-                let b = eval(*b, state)?.as_double()?;
-                Value::Double(a - b)
-            }
-            crate::grammar::BinaryOperation::Mul => {
-                let a = eval(*a, state)?.as_double()?;
-                let b = eval(*b, state)?.as_double()?;
-                Value::Double(a * b)
-            }
-            crate::grammar::BinaryOperation::Div => {
-                let a = eval(*a, state)?.as_double()?;
-                let b = eval(*b, state)?.as_double()?;
-                Value::Double(a / b)
-            }
-            crate::grammar::BinaryOperation::Pow => {
-                let a = eval(*a, state)?.as_double()?;
-                let b = eval(*b, state)?.as_double()?;
-                Value::Double(a.powf(b))
-            }
-            crate::grammar::BinaryOperation::Custon(_) => todo!(),
-        },
+        }
         Node::UnaryOperation(oper, a) => match oper {
             crate::grammar::UnaryOperation::Negate => {
-                let a = eval(*a, state)?.as_double()?;
+                let a = eval(*a, state, ctx)?.as_double()?;
                 Value::Double(-a)
             }
         },
@@ -267,18 +307,18 @@ pub fn eval(node: Node, state: &mut ExecutionState) -> Result<Value, RuntimeErro
             if let Some(function) = state.functions.get(&name).cloned() {
                 let args = arguments
                     .into_iter()
-                    .map(|arg| eval(arg, state))
+                    .map(|arg| eval(arg, state, ctx))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                return function.eval(args, state);
+                return function.eval(args, state, ctx);
             }
 
             let args = arguments
                 .into_iter()
-                .map(|arg| eval(arg, state))
+                .map(|arg| eval(arg, state, ctx))
                 .collect::<Result<Vec<_>, _>>()?;
 
-            return eval_as_command(name, args);
+            return eval_as_command(name, args, ctx);
 
             // return rte(format!("Undefined function: {}", name));
         }
@@ -309,7 +349,7 @@ pub fn eval(node: Node, state: &mut ExecutionState) -> Result<Value, RuntimeErro
         }
         Node::DefinitionList(defs) => {
             for def in defs {
-                eval(def, state)?;
+                eval(def, state, ctx)?;
             }
 
             Value::Void

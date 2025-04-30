@@ -1,6 +1,7 @@
 use std::env;
 
 use interactive::start_interactive;
+use interpreter::ExecutionContext;
 
 pub mod tokenizer;
 pub mod grammar;
@@ -24,7 +25,7 @@ fn main() {
 
         if let Some((_, ast)) = ast {
             let mut state = interpreter::ExecutionState::new();
-            let _ = interpreter::eval(ast, &mut state);
+            let _ = interpreter::eval(ast, &mut state, ExecutionContext::new());
 
             let result = state.run_main(vec![]);
             println!("result: {:#?}", result);
