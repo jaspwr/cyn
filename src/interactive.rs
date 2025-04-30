@@ -19,7 +19,7 @@ pub fn start_interactive() -> Result<()> {
                 let out = eval_string(&line, &mut state);
 
                 let message = match out {
-                    Ok(value) => value.as_string().unwrap_or_else(|e| format!("[!] {:?}", e)),
+                    Ok(value) => value.as_string().unwrap_or_default(),
                     Err(e) => format!("[!] {:?}", e),
                 };
 

@@ -15,13 +15,49 @@ pub enum Node {
         body: Box<Node>,
         where_definitions: Option<Box<Node>>,
     },
+    Lambda {
+        args: Vec<Node>,
+        body: Box<Node>,
+    },
     Call(Box<Node>, Vec<Node>),
-    Negate(Box<Node>),
-    Add(Box<Node>, Box<Node>),
-    Sub(Box<Node>, Box<Node>),
-    Mul(Box<Node>, Box<Node>),
-    Div(Box<Node>, Box<Node>),
-    Pow(Box<Node>, Box<Node>),
+    UnaryOperation(UnaryOperation, Box<Node>),
+    BinaryOperation(BinaryOperation, Box<Node>, Box<Node>),
+}
+
+#[derive(Debug, Clone)]
+pub enum UnaryOperation {
+    Negate,
+}
+
+impl UnaryOperation {
+    pub fn stringify(&self) -> String {
+        match self {
+            UnaryOperation::Negate => "-".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BinaryOperation {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Pow,
+    Custon(String),
+}
+
+impl BinaryOperation {
+    pub fn stringify(&self) -> String {
+        match self {
+            BinaryOperation::Add => "+".to_string(),
+            BinaryOperation::Sub => "-".to_string(),
+            BinaryOperation::Mul => "*".to_string(),
+            BinaryOperation::Div => "//".to_string(),
+            BinaryOperation::Pow => "**".to_string(),
+            BinaryOperation::Custon(s) => s.clone(),
+        }
+    }
 }
 
 pub fn parse(ts: Tokens) -> Option<(Tokens, Ast)> {
@@ -67,7 +103,7 @@ fn assignment(ts: Tokens) -> Option<(Tokens, Ast)> {
         }
 
         if peek_and_compare(&ts, "=") {
-            let (mut ts, rhs) = add(ts[1..].to_vec())?;
+            let (mut ts, rhs) = lambda(ts[1..].to_vec())?;
             let body = Box::new(rhs);
             let mut where_definitions = None;
 
@@ -89,7 +125,30 @@ fn assignment(ts: Tokens) -> Option<(Tokens, Ast)> {
         }
     }
 
-    return add(ts);
+    return lambda(ts);
+}
+
+fn lambda(ts: Tokens) -> Option<(Tokens, Ast)> {
+    if peek_and_compare(&ts, "λ") {
+        let mut ts = ts[1..].to_vec();
+
+        let mut args = vec![];
+
+        while let Some((new_ts, arg)) = literal(ts.clone()) {
+            ts = new_ts;
+            args.push(arg);
+        }
+
+        if peek_and_compare(&ts, "->") {
+            let (ts, rhs) = lambda(ts[1..].to_vec())?;
+            return Some((
+                ts,
+                Node::Lambda { args, body: Box::new(rhs) },
+            ));
+        }
+    }
+
+    add(ts)
 }
 
 fn add(ts: Tokens) -> Option<(Tokens, Ast)> {
@@ -102,7 +161,8 @@ fn add_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
     if peek_and_compare(&ts, "+") {
         let (ts, rhs) = mul(ts[1..].to_vec())?;
 
-        let this_oper_res = Node::Add(Box::new(lhs), Box::new(rhs));
+        let this_oper_res =
+            Node::BinaryOperation(BinaryOperation::Add, Box::new(lhs), Box::new(rhs));
 
         if let Some(r) = add_(this_oper_res.clone(), ts.clone()) {
             return Some(r);
@@ -112,7 +172,8 @@ fn add_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
     } else if peek_and_compare(&ts, "-") {
         let (ts, rhs) = mul(ts[1..].to_vec())?;
 
-        let this_oper_res = Node::Sub(Box::new(lhs), Box::new(rhs));
+        let this_oper_res =
+            Node::BinaryOperation(BinaryOperation::Sub, Box::new(lhs), Box::new(rhs));
 
         if let Some(r) = add_(this_oper_res.clone(), ts.clone()) {
             return Some(r);
@@ -134,17 +195,19 @@ fn mul_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
     if peek_and_compare(&ts, "*") {
         let (ts, rhs) = unary_minus(ts[1..].to_vec())?;
 
-        let this_oper_res = Node::Mul(Box::new(lhs), Box::new(rhs));
+        let this_oper_res =
+            Node::BinaryOperation(BinaryOperation::Mul, Box::new(lhs), Box::new(rhs));
 
         if let Some(r) = mul_(this_oper_res.clone(), ts.clone()) {
             return Some(r);
         }
 
         Some((ts, this_oper_res))
-    } else if peek_and_compare(&ts, "/") {
+    } else if peek_and_compare(&ts, "//") {
         let (ts, rhs) = unary_minus(ts[1..].to_vec())?;
 
-        let this_oper_res = Node::Div(Box::new(lhs), Box::new(rhs));
+        let this_oper_res =
+            Node::BinaryOperation(BinaryOperation::Div, Box::new(lhs), Box::new(rhs));
 
         if let Some(r) = mul_(this_oper_res.clone(), ts.clone()) {
             return Some(r);
@@ -159,7 +222,10 @@ fn mul_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
 fn unary_minus(ts: Tokens) -> Option<(Tokens, Ast)> {
     if peek_and_compare(&ts, "-") {
         let (ts, n) = pow(ts[1..].to_vec())?;
-        Some((ts, Node::Negate(Box::new(n))))
+        Some((
+            ts,
+            Node::UnaryOperation(UnaryOperation::Negate, Box::new(n)),
+        ))
     } else {
         pow(ts)
     }
@@ -175,7 +241,8 @@ fn pow_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
     if peek_and_compare(&ts, "**") {
         let (ts, rhs) = call(ts[1..].to_vec())?;
 
-        let this_oper_res = Node::Pow(Box::new(lhs), Box::new(rhs));
+        let this_oper_res =
+            Node::BinaryOperation(BinaryOperation::Pow, Box::new(lhs), Box::new(rhs));
 
         if let Some(r) = pow_(this_oper_res.clone(), ts.clone()) {
             return Some(r);
@@ -209,7 +276,7 @@ fn call(ts: Tokens) -> Option<(Tokens, Ast)> {
 
 fn brackets(ts: Tokens) -> Option<(Tokens, Ast)> {
     if peek_and_compare(&ts, "(") {
-        let (ts, n) = add(ts[1..].to_vec())?;
+        let (ts, n) = lambda(ts[1..].to_vec())?;
 
         if ts.iter().next()?.token == ")" {
             Some((ts[1..].to_vec(), n))
@@ -250,7 +317,9 @@ fn literal(ts: Tokens) -> Option<(Tokens, Ast)> {
                 .map(|c| c == '$')
                 .unwrap_or(false)
             {
-                node = Node::Indentifier(token.token.to_string());
+                if token.token.len() > 1 {
+                    node = Node::Indentifier(token.token[1..].to_string());
+                }
             }
 
             return Some((ts[1..].to_vec(), node));

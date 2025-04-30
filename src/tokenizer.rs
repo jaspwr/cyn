@@ -27,20 +27,21 @@ enum CharCategory {
 }
 
 fn categorize_char(c: char) -> CharCategory {
-    if c.is_alphanumeric() || c == '_' || c == '$' {
-        return CharCategory::AlphaNum;
-    } else if c.is_whitespace() {
-        return CharCategory::Whitespace;
-    }
-
     match c {
-        '+' | '-' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | '~' => {
+        '+' | '-' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | '~' | 'λ' | '>' | '<' | '@'
+        | '.' | ',' | '?' | ':' | ';' => {
             return CharCategory::Operator;
         }
         '(' | ')' | '{' | '}' | '[' | ']' => {
             return CharCategory::Bracket;
         }
         _ => {}
+    }
+
+    if c.is_alphanumeric() || c == '_' || c == '$' {
+        return CharCategory::AlphaNum;
+    } else if c.is_whitespace() {
+        return CharCategory::Whitespace;
     }
 
     CharCategory::None
@@ -79,7 +80,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         if let Some(mut kind) = kind {
             match token {
                 "where" => kind = TokenKind::Keyword,
-                _ => {},
+                _ => {}
             };
 
             tokens.push(Token {
@@ -97,7 +98,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
     let mut counting_indentation = true;
     let mut in_string_literal = false;
 
-    for (i, c) in source.chars().enumerate() {
+    for (i, c) in source.char_indices() {
         if in_comment {
             if c == '\n' || c == '\r' {
                 in_comment = false;
@@ -164,5 +165,3 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
     tokens
 }
-
-

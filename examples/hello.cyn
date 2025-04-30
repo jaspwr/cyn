@@ -6,4 +6,6 @@ $double $x = $x * 2
 $add $a $b = 
 	$a + $b
 
-main = ls "-a"
+lamb = λa b -> $a + 2
+
+main = $lamb 2 3

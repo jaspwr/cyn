@@ -7,6 +7,7 @@ pub mod grammar;
 pub mod interpreter;
 pub mod interactive;
 pub mod utils;
+pub mod stringify;
 
 fn main() {
     if env::args().len() == 2 {
@@ -28,8 +29,7 @@ fn main() {
             let result = state.run_main(vec![]);
             println!("result: {:#?}", result);
         }
+    } else {
+        let _ = start_interactive();
     }
-
-    
-    let _ = start_interactive();
 }

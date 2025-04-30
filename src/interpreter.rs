@@ -20,22 +20,29 @@ struct Function {
 
 impl Function {
     fn eval(&self, args: Vec<Value>, state: &mut ExecutionState) -> Result<Value, RuntimeError> {
-        if self.args.len() != args.len() {
-            return rte(format!(
-                "Function {} expected {} arguments, got {}",
-                self.owner.as_ref().unwrap(),
-                self.args.len(),
-                args.len()
-            ));
+        if self.args.len() > args.len() {
+            // Curry!
+
+            let captured = args
+                .iter()
+                .zip(self.args.iter())
+                .map(|(value, arg)| (arg.clone(), value.clone()))
+                .collect::<HashMap<_, _>>();
+
+            return Ok(Value::Lambda {
+                args: self.args.iter().skip(args.len()).cloned().collect(),
+                captured,
+                body: self.body.clone(),
+            });
         }
 
         let previous_constants = state.constants.clone();
 
-        for (arg, value) in self.args.iter().zip(args) {
-            state.constants.insert(arg.clone(), value);
+        for (arg, value) in self.args.iter().zip(args.iter()) {
+            state.constants.insert(arg.clone(), value.clone());
         }
 
-        let ret = eval(*self.body.clone(), state).map_err(|e| {
+        let mut ret = eval(*self.body.clone(), state).map_err(|e| {
             let mut new_e = e.clone();
             new_e.callstack.push(self.name.clone());
             new_e
@@ -43,27 +50,64 @@ impl Function {
 
         state.constants = previous_constants;
 
+        let leftover = args.iter().skip(self.args.len()).collect::<Vec<_>>();
+
+        if !leftover.is_empty() {
+            ret = eval_lambda(state, ret, leftover)?;
+        }
+
         Ok(ret)
     }
-
 }
 
-fn eval_as_command(
-    name: String,
-    args: Vec<Value>,
+fn eval_lambda(
+    state: &mut ExecutionState,
+    lambda: Value,
+    leftover: Vec<&Value>,
 ) -> Result<Value, RuntimeError> {
+    if let Value::Lambda {
+        args,
+        captured,
+        body,
+    } = lambda
+    {
+        let previous_constants = captured.clone();
+
+        for (arg, value) in args.iter().zip(leftover.into_iter()) {
+            state.constants.insert(arg.clone(), value.clone());
+        }
+
+        state.constants.extend(captured);
+
+        let body_string =  body.stringify();
+        let ret = eval(*body, state).map_err(|e| {
+            let mut new_e = e.clone();
+            new_e.callstack.push(body_string.clone());
+            new_e
+        })?;
+
+        state.constants = previous_constants;
+
+        return Ok(ret);
+    } else {
+        return rte(format!("Can not evaluate `{}`", lambda.as_string()?));
+    }
+}
+
+fn eval_as_command(name: String, args: Vec<Value>) -> Result<Value, RuntimeError> {
     let cmd = Command::new(&name)
-        .args(args.iter().map(|arg| arg.as_string()).collect::<Result<Vec<_>, _>>()?)
+        .args(
+            args.iter()
+                .map(|arg| arg.as_string())
+                .collect::<Result<Vec<_>, _>>()?,
+        )
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn();
 
     if let Err(e) = cmd {
-        return rte(format!(
-            "Failed to execute command {}: {}",
-            name, e
-        ));
+        return rte(format!("Failed to execute command {}: {}", name, e));
     }
 
     let mut child = cmd.unwrap();
@@ -115,6 +159,11 @@ pub enum Value {
     Void,
     String(String),
     Double(f64),
+    Lambda {
+        args: Vec<String>,
+        captured: HashMap<String, Value>,
+        body: Box<Node>,
+    },
 }
 
 impl Value {
@@ -123,18 +172,23 @@ impl Value {
             Value::Void => return rte("Cannot convert void to string"),
             Value::String(s) => s.clone(),
             Value::Double(d) => d.to_string(),
+            Value::Lambda { args, body, .. } => {
+                // TODO: partially apply
+                let args = args.join(" ");
+                format!("λ{} -> {}", args, (*body).stringify())
+            }
         })
     }
 
     fn as_double(&self) -> Result<f64, RuntimeError> {
         match self {
             Value::Double(d) => Ok(*d),
-            _ => self.as_string().and_then(|s| s.trim().parse::<f64>().map_err(|_| {
-                RuntimeError {
+            _ => self.as_string().and_then(|s| {
+                s.trim().parse::<f64>().map_err(|_| RuntimeError {
                     message: format!("Recieved {}. expected double", s),
                     callstack: vec![],
-                }
-            })),
+                })
+            }),
         }
     }
 }
@@ -169,25 +223,44 @@ pub fn eval(node: Node, state: &mut ExecutionState) -> Result<Value, RuntimeErro
             }
 
             // return rte(format!("Undefined identifier: {}", s));
-            
+
             return eval_as_command(s, vec![]);
         }
         Node::DoubleLiteral(d) => Value::Double(d),
-        Node::Add(a, b) => Value::Double(
-            eval(*a, state)?.as_double().unwrap() + eval(*b, state)?.as_double().unwrap(),
-        ),
-        Node::Sub(a, b) => Value::Double(
-            eval(*a, state)?.as_double().unwrap() - eval(*b, state)?.as_double().unwrap(),
-        ),
-        Node::Mul(a, b) => Value::Double(
-            eval(*a, state)?.as_double().unwrap() * eval(*b, state)?.as_double().unwrap(),
-        ),
-        Node::Div(a, b) => Value::Double(
-            eval(*a, state)?.as_double().unwrap() / eval(*b, state)?.as_double().unwrap(),
-        ),
-        Node::Negate(a) => Value::Double(
-            -eval(*a, state)?.as_double().unwrap()
-        ),
+        Node::BinaryOperation(oper, a, b) => match oper {
+            crate::grammar::BinaryOperation::Add => {
+                let a = eval(*a, state)?.as_double()?;
+                let b = eval(*b, state)?.as_double()?;
+                Value::Double(a + b)
+            }
+            crate::grammar::BinaryOperation::Sub => {
+                let a = eval(*a, state)?.as_double()?;
+                let b = eval(*b, state)?.as_double()?;
+                Value::Double(a - b)
+            }
+            crate::grammar::BinaryOperation::Mul => {
+                let a = eval(*a, state)?.as_double()?;
+                let b = eval(*b, state)?.as_double()?;
+                Value::Double(a * b)
+            }
+            crate::grammar::BinaryOperation::Div => {
+                let a = eval(*a, state)?.as_double()?;
+                let b = eval(*b, state)?.as_double()?;
+                Value::Double(a / b)
+            }
+            crate::grammar::BinaryOperation::Pow => {
+                let a = eval(*a, state)?.as_double()?;
+                let b = eval(*b, state)?.as_double()?;
+                Value::Double(a.powf(b))
+            }
+            crate::grammar::BinaryOperation::Custon(_) => todo!(),
+        },
+        Node::UnaryOperation(oper, a) => match oper {
+            crate::grammar::UnaryOperation::Negate => {
+                let a = eval(*a, state)?.as_double()?;
+                Value::Double(-a)
+            }
+        },
         Node::Call(name, arguments) => {
             let name = as_identifier(*name)?;
 
@@ -200,7 +273,8 @@ pub fn eval(node: Node, state: &mut ExecutionState) -> Result<Value, RuntimeErro
                 return function.eval(args, state);
             }
 
-            let args = arguments.into_iter()
+            let args = arguments
+                .into_iter()
                 .map(|arg| eval(arg, state))
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -239,9 +313,20 @@ pub fn eval(node: Node, state: &mut ExecutionState) -> Result<Value, RuntimeErro
             }
 
             Value::Void
-        },
-        Node::Pow(a, b) => todo!(),
+        }
+        Node::Lambda { args, body } => {
+            let args = args
+                .into_iter()
+                .map(|arg| as_identifier(arg))
+                .collect::<Result<Vec<_>, _>>()?;
 
+            Value::Lambda {
+                args,
+                // TODO: only use values that are used in the body
+                captured: state.constants.clone(),
+                body,
+            }
+        }
     })
 }
 
