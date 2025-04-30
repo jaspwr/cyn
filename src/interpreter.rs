@@ -191,11 +191,13 @@ pub enum Value {
     Void,
     String(String),
     Double(f64),
+    Bool(bool),
     Lambda {
         args: Vec<String>,
         captured: HashMap<String, Value>,
         body: Box<Node>,
     },
+    Array(Vec<Value>),
 }
 
 impl Value {
@@ -209,6 +211,15 @@ impl Value {
                 let args = args.join(" ");
                 format!("λ{} -> {}", args, (*body).stringify())
             }
+            Value::Array(items) => {
+                let items = items
+                    .iter()
+                    .map(|item| item.as_string())
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(", ");
+                format!("[{}]", items)
+            }
+            Value::Bool(value) => if *value { "true" } else { "false" }.to_string(),
         })
     }
 
@@ -220,6 +231,31 @@ impl Value {
                     message: format!("Recieved {}. expected double", s),
                     callstack: vec![],
                 })
+            }),
+        }
+    }
+
+    pub fn as_array(&self) -> Result<Value, RuntimeError> {
+        match self {
+            Value::Array(arr) => Ok(Value::Array(arr.clone())),
+            Value::String(s) => Ok(Value::Array(
+                s.chars().map(|c| Value::String(c.to_string())).collect(),
+            )),
+            _ => rte(format!("`{}` is not a valid array", self.as_string()?)),
+        }
+    }
+
+    pub fn as_bool(&self) -> Result<bool, RuntimeError> {
+        match self {
+            Value::Bool(b) => Ok(*b),
+            _ => self.as_string().and_then(|s| {
+                if s == "true" {
+                    Ok(true)
+                } else if s == "false" {
+                    Ok(false)
+                } else {
+                    rte(format!("Recieved {}. expected bool", s))
+                }
             }),
         }
     }
@@ -235,7 +271,7 @@ pub struct RuntimeError {
     message: String,
 }
 
-fn rte<T>(message: impl ToString) -> Result<T, RuntimeError> {
+pub fn rte<T>(message: impl ToString) -> Result<T, RuntimeError> {
     Err(RuntimeError {
         message: message.to_string(),
         callstack: vec![],
@@ -291,6 +327,12 @@ pub fn eval(
                     let a = eval(*a, state, ctx)?.as_double()?;
                     let b = eval(*b, state, ctx)?.as_double()?;
                     Value::Double(a.powf(b))
+                }
+                crate::grammar::BinaryOperation::Eq => {
+                    // TODO: try checking types first
+                    let a = eval(*a, state, ctx)?.as_string()?;
+                    let b = eval(*b, state, ctx)?.as_string()?;
+                    Value::Bool(a == b)
                 }
                 crate::grammar::BinaryOperation::Custon(_) => todo!(),
             }
@@ -367,6 +409,23 @@ pub fn eval(
                 body,
             }
         }
+        Node::ArrayLiteral(items) => Value::Array(
+            items
+                .into_iter()
+                .map(|i| eval(i, state, ctx))
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+        Node::IfThenElse {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            if eval(*condition, state, ctx)?.as_bool()? {
+                eval(*then_branch, state, ctx)?
+            } else {
+                eval(*else_branch, state, ctx)?
+            }
+        },
     })
 }
 

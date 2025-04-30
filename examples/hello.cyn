@@ -8,4 +8,8 @@ $add $a $b =
 
 lamb = λa b -> $a + 2
 
-main = $lamb 2 3
+arr = [1, 2, 3]
+
+main = if $h == 8
+	then fuck
+	 else poo

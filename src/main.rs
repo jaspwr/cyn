@@ -9,6 +9,7 @@ pub mod interpreter;
 pub mod interactive;
 pub mod utils;
 pub mod stringify;
+pub mod builtins;
 
 fn main() {
     if env::args().len() == 2 {

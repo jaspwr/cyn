@@ -49,6 +49,24 @@ impl Node {
                     .join(" ");
                 format!("{} {}", node.stringify(), args)
             }
+            Node::ArrayLiteral(items) => {
+                let items = items
+                    .iter()
+                    .map(|a| a.stringify())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("[{}]", items)
+            }
+            Node::IfThenElse {
+                condition,
+                then_branch,
+                else_branch,
+            } => format!(
+                "if {} then {} else {}",
+                condition.stringify(),
+                then_branch.stringify(),
+                else_branch.stringify()
+            ),
         }
     }
 }
