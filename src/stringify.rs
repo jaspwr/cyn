@@ -7,9 +7,9 @@ impl Node {
             Node::Indentifier(s) => format!("${}", s),
             Node::DoubleLiteral(d) => d.to_string(),
             Node::BinaryOperation(oper, a, b) => {
-                format!("{} {} {}", a.stringify(), oper.stringify(), b.stringify())
+                format!("({} {} {})", a.stringify(), oper.stringify(), b.stringify())
             }
-            Node::UnaryOperation(oper, a) => format!("{} {}", oper.stringify(), a.stringify()),
+            Node::UnaryOperation(oper, a) => format!("({} {})", oper.stringify(), a.stringify()),
             Node::DefinitionList(defs) => defs
                 .iter()
                 .map(|d| d.stringify())
@@ -47,7 +47,7 @@ impl Node {
                     .map(|a| a.stringify())
                     .collect::<Vec<_>>()
                     .join(" ");
-                format!("{} {}", node.stringify(), args)
+                format!("({} {})", node.stringify(), args)
             }
             Node::ArrayLiteral(items) => {
                 let items = items
