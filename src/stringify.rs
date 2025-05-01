@@ -84,6 +84,9 @@ impl BinaryOperation {
             BinaryOperation::Gt => ">".to_string(),
             BinaryOperation::Lte => "<=".to_string(),
             BinaryOperation::Gte => ">=".to_string(),
+            BinaryOperation::And => "&&".to_string(),
+            BinaryOperation::Or => "||".to_string(),
+            BinaryOperation::Index => "!!".to_string(),
             BinaryOperation::Custon(s) => s.clone(),
         }
     }

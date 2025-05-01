@@ -55,6 +55,9 @@ pub enum BinaryOperation {
     Gt,
     Lte,
     Gte,
+    And,
+    Or,
+    Index,
     Custon(String),
 }
 
@@ -205,7 +208,7 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
             },
         ));
     } else {
-        eq(ts, ctx)
+        bool_ops(ts, ctx)
     }
 }
 
@@ -238,6 +241,45 @@ macro_rules! left_accocitive_binary_infix_operator {
     };
 }
 
+macro_rules! right_accocitive_binary_infix_operator {
+    ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
+        fn $name(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+            let (ts, lhs) = $next(ts, ctx)?;
+
+            let mut expr = (ts, lhs);
+
+            while let Ok(new_expr) = $alt(expr.1.clone(), expr.0.clone(), ctx) {
+                expr = new_expr;
+            }
+
+            Ok(expr)
+        }
+
+        fn $alt(lhs: Ast, ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+            $(
+                if peek_and_compare(&ts, $comp) {
+                    let (ts, rhs) = $next(ts[1..].to_vec(), ctx)?;
+
+                    let this_oper_res =
+                        Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
+
+                    return Ok((ts, this_oper_res));
+                }
+            )+
+
+            Err(ParseError {
+                message: format!("Expected one of: {}", [$($comp.to_string()),+].join(", ")),
+                range: (0, 0),
+            })
+        }
+    };
+}
+
+right_accocitive_binary_infix_operator!(bool_ops, _bool_ops, eq,
+    {"&&", BinaryOperation::And},
+    {"||", BinaryOperation::Or}
+);
+
 left_accocitive_binary_infix_operator!(eq, eq_, add,
     {"==", BinaryOperation::Eq},
     {"<", BinaryOperation::Lt},
@@ -268,8 +310,12 @@ fn unary_minus(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseEr
     }
 }
 
-left_accocitive_binary_infix_operator!(pow, pow_, call,
+left_accocitive_binary_infix_operator!(pow, pow_, index,
     {"**", BinaryOperation::Pow}
+);
+
+left_accocitive_binary_infix_operator!(index, index_, call,
+    {"!!", BinaryOperation::Index}
 );
 
 fn call(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {

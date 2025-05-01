@@ -192,6 +192,7 @@ pub enum Value {
     Void,
     String(String),
     Double(f64),
+    Integer(i64),
     Bool(bool),
     Lambda {
         args: Vec<String>,
@@ -207,6 +208,7 @@ impl Value {
             Value::Void => return rte("Cannot convert void to string"),
             Value::String(s) => s.clone(),
             Value::Double(d) => d.to_string(),
+            Value::Integer(i) => i.to_string(),
             Value::Lambda { args, body, .. } => {
                 // TODO: partially apply
                 let args = args.join(" ");
@@ -227,9 +229,23 @@ impl Value {
     fn as_double(&self) -> Result<f64, RuntimeError> {
         match self {
             Value::Double(d) => Ok(*d),
+            Value::Integer(i) => Ok(*i as f64),
             _ => self.as_string().and_then(|s| {
                 s.trim().parse::<f64>().map_err(|_| RuntimeError {
                     message: format!("Recieved {}. expected double", s),
+                    callstack: vec![],
+                    range: None,
+                })
+            }),
+        }
+    }
+
+    fn as_int(&self) -> Result<i64, RuntimeError> {
+        match self {
+            Value::Integer(d) => Ok(*d),
+            _ => self.as_string().and_then(|s| {
+                s.trim().parse::<i64>().map_err(|_| RuntimeError {
+                    message: format!("Recieved {}. expected integer", s),
                     callstack: vec![],
                     range: None,
                 })
@@ -357,6 +373,32 @@ pub fn eval(
                     let a = eval(*a, state, ctx)?.as_double()?;
                     let b = eval(*b, state, ctx)?.as_double()?;
                     Value::Bool(a >= b)
+                }
+                crate::grammar::BinaryOperation::And => {
+                    let a = eval(*a, state, ctx)?.as_bool()?;
+                    let b = eval(*b, state, ctx)?.as_bool()?;
+                    Value::Bool(a && b)
+                }
+                crate::grammar::BinaryOperation::Or => {
+                    let a = eval(*a, state, ctx)?.as_bool()?;
+                    let b = eval(*b, state, ctx)?.as_bool()?;
+                    Value::Bool(a || b)
+                }
+                crate::grammar::BinaryOperation::Index => {
+                    let a = eval(*a, state, ctx)?.as_array()?;
+                    let b = eval(*b, state, ctx)?.as_int()?;
+
+                    if let Value::Array(arr) = a {
+                        if b < 0 {
+                            return rte(format!("Negative index: {}", b));
+                        }
+                        if b >= arr.len() as i64 {
+                            return rte(format!("Index out of bounds: {}", b));
+                        }
+                        return Ok(arr[b as usize].clone());
+                    } else {
+                        panic!();
+                    }
                 }
                 crate::grammar::BinaryOperation::Custon(_) => todo!(),
             }
