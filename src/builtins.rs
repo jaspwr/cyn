@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use crate::interpreter::{rte, ExecutionState, RuntimeError, RuntimeState, Value};
 
@@ -58,11 +58,11 @@ fn cd(args: Vec<Value>, state: &mut RuntimeState) -> Result<Value, RuntimeError>
         return rte("Path does not exist");
     }
 
-    state.working_directory.set(&path)?;
-
     if let Err(e) = std::env::set_current_dir(path_pathbuf) {
         return rte(format!("{:?}", e));
     }
+
+    state.working_directory.set(&pwd()?.as_string()?)?;
 
     Ok(Value::Void)
 }
@@ -81,6 +81,15 @@ pub fn assert(args: Vec<Value>) -> Result<Value, RuntimeError> {
     Ok(Value::Void)
 }
 
+pub fn pwd() -> Result<Value, RuntimeError> {
+    Ok(Value::String(
+        env::current_dir()
+            .or(rte("Failed to get cwd"))?
+            .to_string_lossy()
+            .to_string(),
+    ))
+}
+
 pub fn try_builtin(
     name: &str,
     args: Vec<Value>,
@@ -91,7 +100,7 @@ pub fn try_builtin(
         "print" => print(args),
         "println" => println(args),
         "lines" => lines(args[0].clone()),
-        "pwd" => Ok(Value::String(state.working_directory.as_str().to_string())),
+        "pwd" => pwd(),
         "cd" => cd(args, state),
         "assert" => assert(args),
         _ => return None,

@@ -8,9 +8,9 @@ use crate::{
 
 #[derive(Debug)]
 pub struct ExecutionState {
+    pub constants: HashMap<String, Value>,
+    pub runtime_state: RuntimeState,
     functions: HashMap<String, Function>,
-    constants: HashMap<String, Value>,
-    runtime_state: RuntimeState,
 }
 
 #[derive(Debug, Clone)]
