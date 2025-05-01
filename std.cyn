@@ -1,0 +1,32 @@
+#!/bin/cyn
+
+# Cyn Standard Library
+
+#? Sum an array of numbers.
+#? ## Example
+#? ```cyn
+#? sum [1, 2, 3, 4] # 10
+#? ```
+sum = reduce 0 (λa b -> $a + $b)
+
+#? Concatentate an array of arrays.
+#? ## Example
+#? ```cyn
+#? concat [[1], [2, 3], [4, 5, 6]] # [1, 2, 3, 4, 5, 6]
+#? ```
+concat = reduce [] (λa b -> $b ++ $a)
+
+map f arr = map_ $f $arr (len $arr)
+map_ f arr i = if $i == 0
+	then []
+    else [$f ($arr !! ($i - 1))] ++ map_ $f $arr ($i - 1)
+
+filter f arr = filter_ $f $arr (len $arr)
+filter_ f arr i = if $i == 0
+	then []
+    else (if $f ($arr !! ($i - 1)) then [$arr !! ($i - 1)] else []) ++ filter_ $f $arr ($i - 1)
+
+reduce acc f arr = reduce_ $acc $f $arr (len $arr)
+reduce_ acc f arr i = if $i == 0
+	then $acc
+	else reduce_ ($f $acc ($arr !! ($i - 1))) $f $arr ($i - 1)

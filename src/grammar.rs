@@ -334,7 +334,7 @@ left_accocitive_binary_infix_operator!(eq, eq_, concat,
     {"<=", BinaryOperation::Lte}
 );
 
-left_accocitive_binary_infix_operator!(concat, concat_, add,
+right_accocitive_binary_infix_operator!(concat, concat_, add,
     {"++", BinaryOperation::Concat}
 );
 

@@ -12,10 +12,6 @@ runOn f a = f a
 
 arr = [1, 2, 3]
 
-map f arr = map_ $f $arr (len $arr)
-map_ f arr i = if $i == 0
-	then []
-    else [$f ($arr !! ($i - 1))] ++ map_ $f $arr ($i - 1)
 
 bleh = if h == 7
 	then if h == 8
