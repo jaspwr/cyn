@@ -1,7 +1,8 @@
 use std::env;
 
+use homedir::my_home;
 use interactive::start_interactive;
-use interpreter::ExecutionContext;
+use interpreter::{load_module, ExecutionContext};
 
 pub mod tokenizer;
 pub mod grammar;
@@ -13,6 +14,17 @@ pub mod builtins;
 pub mod heapless;
 
 fn main() {
+    let mut state = interpreter::ExecutionState::new();
+
+    if let Ok(Some(home)) = my_home() {
+        let cynrc = home.join(".cynrc");
+        if cynrc.exists() {
+            if let Err(e) = load_module(cynrc, false, &mut state) {
+                eprintln!("Error loading .cynrc: {:?}", e);
+            }
+        }
+    }
+
     if env::args().len() == 2 {
         let filename = env::args().nth(1).unwrap();
         let source = std::fs::read_to_string(filename).unwrap();
@@ -26,13 +38,12 @@ fn main() {
         println!("ast: {:#?}", ast);
 
         if let Ok(ast) = ast {
-            let mut state = interpreter::ExecutionState::new();
             let _ = interpreter::eval(ast, &mut state, ExecutionContext::new());
 
             let result = state.run_main(vec![]);
             println!("result: {:#?}", result);
         }
     } else {
-        let _ = start_interactive();
+        let _ = start_interactive(state);
     }
 }

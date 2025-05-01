@@ -1,4 +1,10 @@
-use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
+use std::{
+    collections::HashMap,
+    env,
+    io::Write,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use crate::{
     builtins::try_builtin,
@@ -640,41 +646,50 @@ pub fn eval(
             }
         }
         Node::Import { qualified, path } => {
-            let path = eval(*path, state, ctx)?.as_string()?;
+            let path = eval(*path, state, ctx.clone())?.as_string()?;
             let path_pathbuf = PathBuf::from(path.clone());
             if !path_pathbuf.exists() {
                 return rte(format!("File {} does not exist", path));
             }
-            let Some(module) = path_pathbuf
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-            else {
-                return rte(format!("Module in {} didn't have a valid name.", path));
-            };
-            let Ok(source) = std::fs::read_to_string(path_pathbuf) else {
-                return rte(format!("Failed to read file {}", path));
-            };
 
-            let tokens = tokenizer::tokenize(&source);
-
-            let mut ctx = ExecutionContext::new();
-
-            if qualified {
-                ctx.function_prefix = Some(module);
-            }
-
-            match grammar::parse(tokens) {
-                Ok(ast) => eval(ast, state, ctx)?,
-                Err(e) => {
-                    return Err(RuntimeError {
-                        message: format!("Syntax error: {}", e.message),
-                        callstack: vec![],
-                        range: Some(e.range),
-                    });
-                }
-            }
+            load_module(path_pathbuf, qualified, state)?
         }
     })
+}
+
+pub fn load_module(
+    path: PathBuf,
+    qualified: bool,
+    state: &mut ExecutionState,
+) -> Result<Value, RuntimeError> {
+    let Some(module) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else {
+        return rte(format!(
+            "Module in {} didn't have a valid name.",
+            path.display()
+        ));
+    };
+    let Ok(source) = std::fs::read_to_string(path.clone()) else {
+        return rte(format!("Failed to read file {}", path.display()));
+    };
+
+    let tokens = tokenizer::tokenize(&source);
+
+    let mut ctx = ExecutionContext::new();
+
+    if qualified {
+        ctx.function_prefix = Some(module);
+    }
+
+    match grammar::parse(tokens) {
+        Ok(ast) => eval(ast, state, ctx),
+        Err(e) => {
+            return Err(RuntimeError {
+                message: format!("Syntax error: {}", e.message),
+                callstack: vec![],
+                range: Some(e.range),
+            });
+        }
+    }
 }
 
 fn range(

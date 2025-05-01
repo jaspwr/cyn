@@ -9,8 +9,8 @@ use rustyline::completion::FilenameCompleter;
 use rustyline::highlight::{CmdKind, Highlighter, MatchingBracketHighlighter};
 use rustyline::hint::HistoryHinter;
 use rustyline::validate::MatchingBracketValidator;
-use rustyline::{CompletionType, Config, EditMode, Editor};
 use rustyline::{Completer, Helper, Hinter, Validator};
+use rustyline::{CompletionType, Config, EditMode, Editor};
 
 use crate::interpreter;
 use crate::utils::eval_string;
@@ -51,20 +51,19 @@ impl Highlighter for MyHelper {
     }
 }
 
-pub fn start_interactive() -> Result<()> {
+pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
     let mut rl = DefaultEditor::new()?;
     let _ = rl.load_history("history.txt");
 
-    let mut state = interpreter::ExecutionState::new();
-
-    println!("  ....  .... ... .. ...  
+    println!(
+        "  ....  .... ... .. ...  
 .|   ''  '|.  |   ||  || 
 ||        '|.|    ||  || 
  '|...'    '|    .||. ||.
         .. |             
-         ''");
+         ''"
+    );
     println!("-------- v{} --------", env!("CARGO_PKG_VERSION"));
-
 
     let config = Config::builder()
         .history_ignore_space(true)
@@ -119,8 +118,5 @@ fn prompt(state: &interpreter::ExecutionState) -> String {
     let cwd = state.runtime_state.working_directory.as_str().to_string();
     let cwd = cwd.to_string();
 
-    format!(
-        "{} >> ",
-        cwd,
-    ).to_string()
+    format!("{} >> ", cwd,).to_string()
 }
