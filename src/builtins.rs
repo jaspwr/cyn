@@ -1,6 +1,9 @@
-use std::{env, path::PathBuf};
+use std::{env, fs::read_to_string, path::PathBuf};
 
-use crate::interpreter::{rte, ExecutionState, RuntimeError, RuntimeState, Value};
+use crate::{
+    interpreter::{rte, ExecutionState, RuntimeError, RuntimeState, Value},
+    utils::parse_args,
+};
 
 pub fn len(value: Value) -> Result<Value, RuntimeError> {
     Ok(match value {
@@ -31,6 +34,15 @@ pub fn println(values: Vec<Value>) -> Result<Value, RuntimeError> {
     print(values.clone())?;
     println!();
     Ok(Value::Void)
+}
+
+pub fn readline(_values: Vec<Value>) -> Result<Value, RuntimeError> {
+    let mut buffer = String::new();
+    std::io::stdin()
+        .read_line(&mut buffer)
+        .or(rte("Failed to read line"))?;
+
+    Ok(Value::String(buffer.trim().to_string()))
 }
 
 pub fn lines(value: Value) -> Result<Value, RuntimeError> {
@@ -67,6 +79,149 @@ fn cd(args: Vec<Value>, state: &mut RuntimeState) -> Result<Value, RuntimeError>
     Ok(Value::Void)
 }
 
+fn ls(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let args = parse_args(args)?;
+
+    let path = if !args.files.is_empty() {
+        args.files[0].clone()
+    } else {
+        pwd()?.as_string()?
+    };
+
+    let path_pathbuf = PathBuf::from(path.clone());
+
+    if !path_pathbuf.exists() {
+        return rte("Path does not exist");
+    }
+
+    if args.long_flags.contains("array") {
+        let entries = std::fs::read_dir(path_pathbuf)
+            .or(rte("Failed to read directory"))?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| Value::String(entry.file_name().to_string_lossy().to_string()))
+            .collect::<Vec<_>>();
+
+        return Ok(Value::Array(entries));
+    }
+
+    let all = args.short_flags.contains("a") || args.long_flags.contains("all");
+
+    let entries = std::fs::read_dir(path_pathbuf)
+        .or(rte("Failed to read directory"))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .filter(|name| !(!all && name.chars().next() == Some('.')))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Ok(Value::String(entries))
+}
+
+fn mkdir(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return rte("Usage: mkdir <path>");
+    }
+
+    let path = args[0].as_string()?;
+
+    let path_pathbuf = PathBuf::from(path.clone());
+
+    if path_pathbuf.exists() {
+        return rte("Path already exists");
+    }
+
+    std::fs::create_dir(path_pathbuf).or(rte("Failed to create directory"))?;
+
+    Ok(Value::Void)
+}
+
+fn cat(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let args = parse_args(args)?;
+
+    if args.files.len() != 1 {
+        return rte("Usage: mkdir <path>");
+    }
+
+    let file = args.files[0].clone();
+    let path = PathBuf::from(file);
+
+    if !path.exists() {
+        return rte(format!("File {} does not exist", path.display()));
+    }
+
+    if !path.is_file() {
+        return rte(format!("Path {} is not a file", path.display()));
+    }
+
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return rte("Failled to read file");
+    };
+
+    Ok(Value::String(contents))
+}
+
+fn mkcd(args: Vec<Value>, state: &mut RuntimeState) -> Result<Value, RuntimeError> {
+    mkdir(args.clone())?;
+    cd(args, state)
+}
+
+fn rm(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let args = parse_args(args)?;
+
+    if args.files.is_empty() {
+        return rte("Usage: rm <path>");
+    }
+
+    let recurse = args.short_flags.contains("r") || args.long_flags.contains("recurse");
+    // let force = args.short_flags.contains("f") || args.long_flags.contains("force");
+
+    for path in &args.files {
+        let path = PathBuf::from(path.clone());
+
+        if !path.exists() {
+            return rte(format!("Path {} does not exist", path.display()));
+        }
+    }
+
+    println!("Removing {}. Are you sure? (y/n)", args.files.join(" "));
+    if readline(vec![])?.as_string()? != "y" {
+        println!("Aborting");
+        return Ok(Value::Void);
+    }
+
+    for path in args.files {
+        let path = PathBuf::from(path.clone());
+
+        if path.is_dir() {
+            if !recurse {
+                return rte(format!(
+                    "Path {} is a directory, use -r to recurse",
+                    path.display()
+                ));
+            }
+
+            std::fs::remove_dir_all(&path)
+                .or(rte(format!("Failed to remove {}", path.display())))?;
+        } else {
+            std::fs::remove_file(&path).or(rte(format!("Failed to remove {}", path.display())))?;
+        }
+    }
+
+    Ok(Value::Void)
+}
+
+pub fn touch(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let args = parse_args(args)?;
+
+    for path in &args.files {
+        let path = PathBuf::from(path.clone());
+
+        std::fs::write(&path, "").or(rte(format!("Failed to create file {}", path.display())))?;
+    }
+
+    Ok(Value::Void)
+}
+
 pub fn assert(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
         return rte("Usage: assert <condition>");
@@ -99,10 +254,17 @@ pub fn try_builtin(
         "len" => len(args[0].clone()),
         "print" => print(args),
         "println" => println(args),
+        "readline" => readline(args),
         "lines" => lines(args[0].clone()),
         "pwd" => pwd(),
         "cd" => cd(args, state),
         "assert" => assert(args),
+        "ls" => ls(args),
+        "mkdir" => mkdir(args),
+        "cat" => cat(args),
+        "mkcd" => mkcd(args, state),
+        "touch" => touch(args),
+        "rm" => rm(args),
         _ => return None,
     })
 }
