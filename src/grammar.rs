@@ -58,6 +58,10 @@ pub enum BinaryOperation {
     And,
     Or,
     Index,
+    Range,
+    RangeInclusive,
+    WriteFile,
+    Pipe,
     Custon(String),
 }
 
@@ -208,7 +212,7 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
             },
         ));
     } else {
-        bool_ops(ts, ctx)
+        file(ts, ctx)
     }
 }
 
@@ -275,6 +279,14 @@ macro_rules! right_accocitive_binary_infix_operator {
     };
 }
 
+left_accocitive_binary_infix_operator!(file, file_, pipe,
+    {">>", BinaryOperation::WriteFile}
+);
+
+left_accocitive_binary_infix_operator!(pipe, pipe_, bool_ops,
+    {"|", BinaryOperation::Pipe}
+);
+
 right_accocitive_binary_infix_operator!(bool_ops, _bool_ops, eq,
     {"&&", BinaryOperation::And},
     {"||", BinaryOperation::Or}
@@ -314,8 +326,13 @@ left_accocitive_binary_infix_operator!(pow, pow_, index,
     {"**", BinaryOperation::Pow}
 );
 
-left_accocitive_binary_infix_operator!(index, index_, call,
+left_accocitive_binary_infix_operator!(index, index_, range,
     {"!!", BinaryOperation::Index}
+);
+
+left_accocitive_binary_infix_operator!(range, _range, call,
+    {"..", BinaryOperation::Range},
+    {"..=", BinaryOperation::RangeInclusive}
 );
 
 fn call(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {

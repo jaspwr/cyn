@@ -1,4 +1,4 @@
-use std::{collections::HashMap, process::Command};
+use std::{collections::HashMap, io::Write, process::Command};
 
 use crate::{builtins::try_builtin, grammar::Node};
 
@@ -18,14 +18,18 @@ struct Function {
     owner: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ExecutionContext {
     pub piped: bool,
+    pub piped_input: Option<String>,
 }
 
 impl ExecutionContext {
     pub fn new() -> Self {
-        Self { piped: false }
+        Self {
+            piped: false,
+            piped_input: None,
+        }
     }
 }
 
@@ -58,7 +62,7 @@ impl Function {
             state.constants.insert(arg.clone(), value.clone());
         }
 
-        let mut ret = eval(*self.body.clone(), state, ctx).map_err(|e| {
+        let mut ret = eval(*self.body.clone(), state, ctx.clone()).map_err(|e| {
             let mut new_e = e.clone();
             new_e.callstack.push(self.name.clone());
             new_e
@@ -69,7 +73,7 @@ impl Function {
         let leftover = args.into_iter().skip(self.args.len()).collect::<Vec<_>>();
 
         if !leftover.is_empty() {
-            ret = eval_lambda(ret, leftover, state, ctx)?;
+            ret = eval_lambda(ret, leftover, state, ctx.clone())?;
         }
 
         Ok(ret)
@@ -98,7 +102,7 @@ fn eval_lambda(
 
         state.constants.extend(captured);
 
-        let ret = eval(*body, state, ctx).map_err(|e| {
+        let ret = eval(*body, state, ctx.clone()).map_err(|e| {
             let mut new_e = e.clone();
             new_e.callstack.push(lambda_string.clone());
             new_e
@@ -126,15 +130,19 @@ fn eval_as_command(
     );
 
     if ctx.piped {
-        cmd.stdin(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
     } else {
-        cmd.stdin(std::process::Stdio::inherit());
         cmd.stdout(std::process::Stdio::inherit());
         cmd.stderr(std::process::Stdio::inherit());
     }
 
+    if ctx.piped_input.is_some() {
+        cmd.stdin(std::process::Stdio::piped());
+    } else {
+        cmd.stdin(std::process::Stdio::inherit());
+    }
+        
     let cmd = cmd.spawn();
 
     if let Err(e) = cmd {
@@ -143,7 +151,10 @@ fn eval_as_command(
 
     let mut child = cmd.unwrap();
 
-    // let stdin = child.stdin.as_mut().unwrap();
+    if let Some(piped_input) = ctx.piped_input {
+        let stdin = child.stdin.as_mut().unwrap();
+        stdin.write_all(piped_input.as_bytes()).unwrap();
+    }
 
     // if let Some(input) = piped_input {
     //     stdin.write_all(input.as_bytes()).await.unwrap();
@@ -180,7 +191,7 @@ impl ExecutionState {
     pub fn run_main(&mut self, args: Vec<String>) -> Result<Value, RuntimeError> {
         if let Some(main) = self.functions.get("main").cloned() {
             let ctx = ExecutionContext::new();
-            main.eval(vec![], self, ctx)
+            main.eval(vec![], self, ctx.clone())
         } else {
             return rte("No main function defined");
         }
@@ -194,6 +205,10 @@ pub enum Value {
     Double(f64),
     Integer(i64),
     Bool(bool),
+    RangeGenerator {
+        start: i64,
+        end: i64,
+    },
     Lambda {
         args: Vec<String>,
         captured: HashMap<String, Value>,
@@ -223,6 +238,7 @@ impl Value {
                 format!("[{}]", items)
             }
             Value::Bool(value) => if *value { "true" } else { "false" }.to_string(),
+            Value::RangeGenerator { .. } => self.as_array()?.as_string()?,
         })
     }
 
@@ -259,6 +275,13 @@ impl Value {
             Value::String(s) => Ok(Value::Array(
                 s.chars().map(|c| Value::String(c.to_string())).collect(),
             )),
+            Value::RangeGenerator { start, end } => {
+                let mut arr = Vec::new();
+                for i in *start..*end {
+                    arr.push(Value::Integer(i));
+                }
+                Ok(Value::Array(arr))
+            }
             _ => rte(format!("`{}` is not a valid array", self.as_string()?)),
         }
     }
@@ -311,82 +334,82 @@ pub fn eval(
             }
 
             if let Some(function) = state.functions.get(&s).cloned() {
-                return function.eval(vec![], state, ExecutionContext { piped: true, ..ctx });
+                return function.eval(vec![], state, ExecutionContext { piped: true, ..ctx.clone() });
             }
 
             // return rte(format!("Undefined identifier: {}", s));
 
-            return eval_as_command(s, vec![], ctx);
+            return eval_as_command(s, vec![], ctx.clone());
         }
         Node::DoubleLiteral(d) => Value::Double(d),
         Node::BinaryOperation(oper, a, b) => {
-            let ctx = ExecutionContext { piped: true, ..ctx };
+            let ctx = ExecutionContext { piped: true, ..ctx.clone() };
 
             match oper {
                 crate::grammar::BinaryOperation::Add => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a + b)
                 }
                 crate::grammar::BinaryOperation::Sub => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a - b)
                 }
                 crate::grammar::BinaryOperation::Mul => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a * b)
                 }
                 crate::grammar::BinaryOperation::Div => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a / b)
                 }
                 crate::grammar::BinaryOperation::Pow => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a.powf(b))
                 }
                 crate::grammar::BinaryOperation::Eq => {
                     // TODO: try checking types first
-                    let a = eval(*a, state, ctx)?.as_string()?;
-                    let b = eval(*b, state, ctx)?.as_string()?;
+                    let a = eval(*a, state, ctx.clone())?.as_string()?;
+                    let b = eval(*b, state, ctx.clone())?.as_string()?;
                     Value::Bool(a == b)
                 }
                 crate::grammar::BinaryOperation::Lt => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Bool(a < b)
                 }
                 crate::grammar::BinaryOperation::Gt => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Bool(a > b)
                 }
                 crate::grammar::BinaryOperation::Lte => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Bool(a <= b)
                 }
                 crate::grammar::BinaryOperation::Gte => {
-                    let a = eval(*a, state, ctx)?.as_double()?;
-                    let b = eval(*b, state, ctx)?.as_double()?;
+                    let a = eval(*a, state, ctx.clone())?.as_double()?;
+                    let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Bool(a >= b)
                 }
                 crate::grammar::BinaryOperation::And => {
-                    let a = eval(*a, state, ctx)?.as_bool()?;
-                    let b = eval(*b, state, ctx)?.as_bool()?;
+                    let a = eval(*a, state, ctx.clone())?.as_bool()?;
+                    let b = eval(*b, state, ctx.clone())?.as_bool()?;
                     Value::Bool(a && b)
                 }
                 crate::grammar::BinaryOperation::Or => {
-                    let a = eval(*a, state, ctx)?.as_bool()?;
-                    let b = eval(*b, state, ctx)?.as_bool()?;
+                    let a = eval(*a, state, ctx.clone())?.as_bool()?;
+                    let b = eval(*b, state, ctx.clone())?.as_bool()?;
                     Value::Bool(a || b)
                 }
                 crate::grammar::BinaryOperation::Index => {
-                    let a = eval(*a, state, ctx)?.as_array()?;
-                    let b = eval(*b, state, ctx)?.as_int()?;
+                    let a = eval(*a, state, ctx.clone())?.as_array()?;
+                    let b = eval(*b, state, ctx.clone())?.as_int()?;
 
                     if let Value::Array(arr) = a {
                         if b < 0 {
@@ -401,26 +424,53 @@ pub fn eval(
                     }
                 }
                 crate::grammar::BinaryOperation::Custon(_) => todo!(),
+                crate::grammar::BinaryOperation::Range => {
+                    let a = eval(*a, state, ctx.clone())?.as_int()?;
+                    let b = eval(*b, state, ctx.clone())?.as_int()?;
+                    range(state, a, b, ctx.clone())?
+                }
+                crate::grammar::BinaryOperation::RangeInclusive => {
+                    let a = eval(*a, state, ctx.clone())?.as_int()?;
+                    let b = eval(*b, state, ctx.clone())?.as_int()? + 1;
+                    range(state, a, b, ctx.clone())?
+                }
+                crate::grammar::BinaryOperation::WriteFile => {
+                    let data = eval(*a, state, ctx.clone())?.as_string()?;
+                    let path = eval(*b, state, ctx.clone())?.as_string()?;
+
+                    if let Err(e) = std::fs::write(path, data) {
+                        return rte(format!("Failed to write file: {}", e));
+                    }
+
+                    Value::Void
+                }
+                crate::grammar::BinaryOperation::Pipe => {
+                    let data = eval(*a, state, ctx.clone())?.as_string()?;
+                    eval(*b, state, ExecutionContext {
+                        piped_input: Some(data),
+                        ..ctx.clone()
+                    })?
+                },
             }
         }
         Node::UnaryOperation(oper, a) => match oper {
             crate::grammar::UnaryOperation::Negate => {
-                let a = eval(*a, state, ctx)?.as_double()?;
+                let a = eval(*a, state, ctx.clone())?.as_double()?;
                 Value::Double(-a)
             }
         },
         Node::Call(name, arguments) => {
             let args = arguments
                 .into_iter()
-                .map(|arg| eval(arg, state, ctx))
+                .map(|arg| eval(arg, state, ctx.clone()))
                 .collect::<Result<Vec<_>, _>>()?;
 
             let name = match as_identifier(*name.clone()) {
                 Ok(name) => name,
                 Err(_) => {
-                    let value = eval(*name, state, ctx)?;
+                    let value = eval(*name, state, ctx.clone())?;
                     if let Value::Lambda { .. } = value {
-                        return eval_lambda(value, args, state, ctx);
+                        return eval_lambda(value, args, state, ctx.clone());
                     } else {
                         return rte(format!("Invalid function name: {}", value.as_string()?));
                     }
@@ -428,12 +478,12 @@ pub fn eval(
             };
 
             if let Some(function) = state.functions.get(&name).cloned() {
-                return function.eval(args, state, ctx);
+                return function.eval(args, state, ctx.clone());
             }
 
             if let Some(value) = state.constants.get(&name) {
                 if let Value::Lambda { .. } = value {
-                    return eval_lambda(value.clone(), args, state, ctx);
+                    return eval_lambda(value.clone(), args, state, ctx.clone());
                 }
             }
 
@@ -441,7 +491,7 @@ pub fn eval(
                 return value;
             }
 
-            return eval_as_command(name, args, ctx);
+            return eval_as_command(name, args, ctx.clone());
 
             // return rte(format!("Undefined function: {}", name));
         }
@@ -472,7 +522,7 @@ pub fn eval(
         }
         Node::DefinitionList(defs) => {
             for def in defs {
-                eval(def, state, ctx)?;
+                eval(def, state, ctx.clone())?;
             }
 
             Value::Void
@@ -493,7 +543,7 @@ pub fn eval(
         Node::ArrayLiteral(items) => Value::Array(
             items
                 .into_iter()
-                .map(|i| eval(i, state, ctx))
+                .map(|i| eval(i, state, ctx.clone()))
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Node::IfThenElse {
@@ -501,13 +551,25 @@ pub fn eval(
             then_branch,
             else_branch,
         } => {
-            if eval(*condition, state, ctx)?.as_bool()? {
-                eval(*then_branch, state, ctx)?
+            if eval(*condition, state, ctx.clone())?.as_bool()? {
+                eval(*then_branch, state, ctx.clone())?
             } else {
-                eval(*else_branch, state, ctx)?
+                eval(*else_branch, state, ctx.clone())?
             }
         }
     })
+}
+
+fn range(
+    state: &mut ExecutionState,
+    a: i64,
+    b: i64,
+    ctx: ExecutionContext,
+) -> Result<Value, RuntimeError> {
+    if a > b {
+        return rte(format!("Invalid range: {}..{}", a, b));
+    }
+    Ok(Value::RangeGenerator { start: a, end: b })
 }
 
 fn as_identifier(node: Node) -> Result<String, RuntimeError> {
