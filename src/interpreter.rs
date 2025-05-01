@@ -71,7 +71,7 @@ impl Function {
             });
         }
 
-        let previous_constants = state.constants.clone();
+        // let previous_constants = state.constants.clone();
 
         for (arg, value) in self.args.iter().zip(args.iter()) {
             state.constants.insert(arg.clone(), value.clone());
@@ -83,7 +83,7 @@ impl Function {
             new_e
         })?;
 
-        state.constants = previous_constants;
+        // state.constants = previous_constants;
 
         let leftover = args.into_iter().skip(self.args.len()).collect::<Vec<_>>();
 
@@ -109,7 +109,7 @@ fn eval_lambda(
         body,
     } = lambda
     {
-        let previous_constants = captured.clone();
+        let previous_constants = state.constants.clone();
 
         for (arg, value) in args_names.iter().zip(arg_values.into_iter()) {
             state.constants.insert(arg.clone(), value.clone());
@@ -360,6 +360,7 @@ pub fn eval(
     Ok(match node {
         Node::String(s) => Value::String(s),
         Node::Indentifier(s) => {
+            // println!("constants: {:#?} ........ {}", state, s);
             if let Some(value) = state.constants.get(&s) {
                 return Ok(value.clone());
             }
@@ -558,9 +559,7 @@ pub fn eval(
             }
 
             if let Some(value) = state.constants.get(&name) {
-                if let Value::Lambda { .. } = value {
-                    return eval_lambda(value.clone(), args, state, ctx.clone());
-                }
+                return eval_lambda(value.clone(), args, state, ctx.clone());
             }
 
             if let Some(value) = try_builtin(&name, args.clone(), &mut state.runtime_state) {

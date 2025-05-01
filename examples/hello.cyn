@@ -26,7 +26,7 @@ bleh = if h == 7
 # main = runOn (λa -> $a * 2) 16
 
 
-main = map double [1, 2, 3, 4]
+main = map $double [1, 2, 3, 4]
 
 # main = double 8
 
