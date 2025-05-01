@@ -245,6 +245,16 @@ pub fn pwd() -> Result<Value, RuntimeError> {
     ))
 }
 
+pub fn echo(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    Ok(Value::String(format!(
+        "{}\n",
+        args.iter()
+            .map(|v| v.as_string())
+            .collect::<Result<Vec<_>, _>>()?
+            .join(" ")
+    )))
+}
+
 pub fn try_builtin(
     name: &str,
     args: Vec<Value>,
@@ -265,6 +275,7 @@ pub fn try_builtin(
         "mkcd" => mkcd(args, state),
         "touch" => touch(args),
         "rm" => rm(args),
+        "echo" => echo(args),
         _ => return None,
     })
 }
