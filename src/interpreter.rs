@@ -21,6 +21,7 @@ struct Function {
     body: Box<Node>,
     owned_functions: Vec<Function>,
     owner: Option<String>,
+    function_prefix: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +56,11 @@ impl Function {
         state: &mut ExecutionState,
         ctx: ExecutionContext,
     ) -> Result<Value, RuntimeError> {
+        let ctx = ExecutionContext {
+            function_prefix: self.function_prefix.clone(),
+            ..ctx.clone()
+        };
+
         if self.args.len() > args.len() {
             // Curry!
 
@@ -587,6 +593,7 @@ pub fn eval(
                 name: name.clone(),
                 args,
                 body,
+                function_prefix: ctx.function_prefix.clone(),
                 owned_functions: vec![],
                 owner: None,
             };

@@ -67,6 +67,20 @@ fn cd(args: Vec<Value>, state: &mut RuntimeState) -> Result<Value, RuntimeError>
     Ok(Value::Void)
 }
 
+pub fn assert(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return rte("Usage: assert <condition>");
+    }
+
+    let condition = args[0].as_bool()?;
+
+    if !condition {
+        return rte("Assertion failed!");
+    }
+
+    Ok(Value::Void)
+}
+
 pub fn try_builtin(
     name: &str,
     args: Vec<Value>,
@@ -79,6 +93,7 @@ pub fn try_builtin(
         "lines" => lines(args[0].clone()),
         "pwd" => Ok(Value::String(state.working_directory.as_str().to_string())),
         "cd" => cd(args, state),
+        "assert" => assert(args),
         _ => return None,
     })
 }
