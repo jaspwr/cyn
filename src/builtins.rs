@@ -13,13 +13,21 @@ pub fn len(value: Value) -> Result<Value, RuntimeError> {
     })
 }
 
-pub fn print(value: Value) -> Result<Value, RuntimeError> {
-    print!("{}", value.as_string()?);
+pub fn print(values: Vec<Value>) -> Result<Value, RuntimeError> {
+    print!(
+        "{}",
+        values
+            .iter()
+            .map(|v| v.as_string())
+            .collect::<Result<Vec<_>, _>>()?
+            .join(" ")
+    );
     Ok(Value::Void)
 }
 
-pub fn println(value: Value) -> Result<Value, RuntimeError> {
-    println!("{}", value.as_string()?);
+pub fn println(values: Vec<Value>) -> Result<Value, RuntimeError> {
+    print(values.clone())?;
+    println!();
     Ok(Value::Void)
 }
 
@@ -33,4 +41,14 @@ pub fn lines(value: Value) -> Result<Value, RuntimeError> {
     }
 
     rte("`lines` only works on strings")
+}
+
+pub fn try_builtin(name: &str, args: Vec<Value>) -> Option<Result<Value, RuntimeError>> {
+    Some(match name {
+        "len" => len(args[0].clone()),
+        "print" => print(args),
+        "println" => println(args),
+        "lines" => lines(args[0].clone()),
+        _ => return None,
+    })
 }

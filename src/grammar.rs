@@ -50,22 +50,17 @@ pub enum BinaryOperation {
     Mul,
     Div,
     Pow,
-    Custon(String),
     Eq,
+    Lt,
+    Gt,
+    Lte,
+    Gte,
+    Custon(String),
 }
 
-impl BinaryOperation {
-    pub fn stringify(&self) -> String {
-        match self {
-            BinaryOperation::Add => "+".to_string(),
-            BinaryOperation::Sub => "-".to_string(),
-            BinaryOperation::Mul => "*".to_string(),
-            BinaryOperation::Div => "//".to_string(),
-            BinaryOperation::Pow => "**".to_string(),
-            BinaryOperation::Eq => "==".to_string(),
-            BinaryOperation::Custon(s) => s.clone(),
-        }
-    }
+struct ParseError {
+    message: String,
+    range: (usize, usize),
 }
 
 pub fn parse(ts: Tokens) -> Option<(Tokens, Ast)> {
@@ -195,96 +190,52 @@ fn if_then_else(mut ts: Tokens) -> Option<(Tokens, Ast)> {
 }
 
 
-fn eq(ts: Tokens) -> Option<(Tokens, Ast)> {
-    let (ts, lhs) = add(ts)?;
+macro_rules! left_accocitive_binary_infix_operator {
+    ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
+        fn $name(ts: Tokens) -> Option<(Tokens, Ast)> {
+            let (ts, lhs) = $next(ts)?;
 
-    eq_(lhs, ts)
-}
-
-fn eq_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
-    if peek_and_compare(&ts, "==") {
-        let (ts, rhs) = add(ts[1..].to_vec())?;
-
-        let this_oper_res =
-            Node::BinaryOperation(BinaryOperation::Eq, Box::new(lhs), Box::new(rhs));
-
-        if let Some(r) = add_(this_oper_res.clone(), ts.clone()) {
-            return Some(r);
+            $alt(lhs, ts)
         }
 
-        Some((ts, this_oper_res))
-    } else {
-        Some((ts, lhs))
-    }
-}
+        fn $alt(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
+            $(
+                if peek_and_compare(&ts, $comp) {
+                    let (ts, rhs) = $next(ts[1..].to_vec())?;
 
-fn add(ts: Tokens) -> Option<(Tokens, Ast)> {
-    let (ts, lhs) = mul(ts)?;
+                    let this_oper_res =
+                        Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
 
-    add_(lhs, ts)
-}
+                    if let Some(r) = $alt(this_oper_res.clone(), ts.clone()) {
+                        return Some(r);
+                    }
 
-fn add_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
-    if peek_and_compare(&ts, "+") {
-        let (ts, rhs) = mul(ts[1..].to_vec())?;
+                    return Some((ts, this_oper_res));
+                }
+            )+
 
-        let this_oper_res =
-            Node::BinaryOperation(BinaryOperation::Add, Box::new(lhs), Box::new(rhs));
-
-        if let Some(r) = add_(this_oper_res.clone(), ts.clone()) {
-            return Some(r);
+            Some((ts, lhs))
         }
-
-        Some((ts, this_oper_res))
-    } else if peek_and_compare(&ts, "-") {
-        let (ts, rhs) = mul(ts[1..].to_vec())?;
-
-        let this_oper_res =
-            Node::BinaryOperation(BinaryOperation::Sub, Box::new(lhs), Box::new(rhs));
-
-        if let Some(r) = add_(this_oper_res.clone(), ts.clone()) {
-            return Some(r);
-        }
-
-        Some((ts, this_oper_res))
-    } else {
-        Some((ts, lhs))
-    }
+    };
 }
 
-fn mul(ts: Tokens) -> Option<(Tokens, Ast)> {
-    let (ts, lhs) = unary_minus(ts)?;
+left_accocitive_binary_infix_operator!(eq, eq_, add, 
+    {"==", BinaryOperation::Eq},
+    {"<", BinaryOperation::Lt},
+    {">", BinaryOperation::Gt},
+    {"<=", BinaryOperation::Gte},
+    {"<=", BinaryOperation::Lte}
+);
 
-    mul_(lhs, ts)
-}
+left_accocitive_binary_infix_operator!(add, add_, mul,
+    {"+", BinaryOperation::Add},
+    {"-", BinaryOperation::Sub}
+);
 
-fn mul_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
-    if peek_and_compare(&ts, "*") {
-        let (ts, rhs) = unary_minus(ts[1..].to_vec())?;
-
-        let this_oper_res =
-            Node::BinaryOperation(BinaryOperation::Mul, Box::new(lhs), Box::new(rhs));
-
-        if let Some(r) = mul_(this_oper_res.clone(), ts.clone()) {
-            return Some(r);
-        }
-
-        Some((ts, this_oper_res))
-    } else if peek_and_compare(&ts, "//") {
-        let (ts, rhs) = unary_minus(ts[1..].to_vec())?;
-
-        let this_oper_res =
-            Node::BinaryOperation(BinaryOperation::Div, Box::new(lhs), Box::new(rhs));
-
-        if let Some(r) = mul_(this_oper_res.clone(), ts.clone()) {
-            return Some(r);
-        }
-
-        Some((ts, this_oper_res))
-    } else {
-        Some((ts, lhs))
-    }
-}
+left_accocitive_binary_infix_operator!(mul, mul_, unary_minus,
+    {"*", BinaryOperation::Mul},
+    {"//", BinaryOperation::Div}
+);
 
 fn unary_minus(ts: Tokens) -> Option<(Tokens, Ast)> {
     if peek_and_compare(&ts, "-") {
@@ -298,28 +249,9 @@ fn unary_minus(ts: Tokens) -> Option<(Tokens, Ast)> {
     }
 }
 
-fn pow(ts: Tokens) -> Option<(Tokens, Ast)> {
-    let (ts, lhs) = call(ts)?;
-
-    pow_(lhs, ts)
-}
-
-fn pow_(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
-    if peek_and_compare(&ts, "**") {
-        let (ts, rhs) = call(ts[1..].to_vec())?;
-
-        let this_oper_res =
-            Node::BinaryOperation(BinaryOperation::Pow, Box::new(lhs), Box::new(rhs));
-
-        if let Some(r) = pow_(this_oper_res.clone(), ts.clone()) {
-            return Some(r);
-        }
-
-        Some((ts, this_oper_res))
-    } else {
-        Some((ts, lhs))
-    }
-}
+left_accocitive_binary_infix_operator!(pow, pow_, call,
+    {"**", BinaryOperation::Pow}
+);
 
 fn call(ts: Tokens) -> Option<(Tokens, Ast)> {
     let Some((ts, first)) = literal(ts.clone()) else {

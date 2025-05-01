@@ -10,6 +10,7 @@ lamb = λa b -> $a + 2
 
 arr = [1, 2, 3]
 
-main = if $h == 8
-	then fuck
-	 else poo
+main = if $h == 7
+	then asdfjlk
+	 else asdfjlk
+

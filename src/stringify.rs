@@ -1,4 +1,4 @@
-use crate::grammar::Node;
+use crate::grammar::{BinaryOperation, Node};
 
 impl Node {
     pub fn stringify(&self) -> String {
@@ -67,6 +67,24 @@ impl Node {
                 then_branch.stringify(),
                 else_branch.stringify()
             ),
+        }
+    }
+}
+
+impl BinaryOperation {
+    pub fn stringify(&self) -> String {
+        match self {
+            BinaryOperation::Add => "+".to_string(),
+            BinaryOperation::Sub => "-".to_string(),
+            BinaryOperation::Mul => "*".to_string(),
+            BinaryOperation::Div => "//".to_string(),
+            BinaryOperation::Pow => "**".to_string(),
+            BinaryOperation::Eq => "==".to_string(),
+            BinaryOperation::Lt => "<".to_string(),
+            BinaryOperation::Gt => ">".to_string(),
+            BinaryOperation::Lte => "<=".to_string(),
+            BinaryOperation::Gte => ">=".to_string(),
+            BinaryOperation::Custon(s) => s.clone(),
         }
     }
 }

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, process::Command};
 
-use crate::grammar::Node;
+use crate::{builtins::try_builtin, grammar::Node};
 
 #[derive(Debug)]
 pub struct ExecutionState {
@@ -66,7 +66,7 @@ impl Function {
 
         state.constants = previous_constants;
 
-        let leftover = args.iter().skip(self.args.len()).collect::<Vec<_>>();
+        let leftover = args.into_iter().skip(self.args.len()).collect::<Vec<_>>();
 
         if !leftover.is_empty() {
             ret = eval_lambda(ret, leftover, state, ctx)?;
@@ -78,19 +78,19 @@ impl Function {
 
 fn eval_lambda(
     lambda: Value,
-    leftover: Vec<&Value>,
+    arg_values: Vec<Value>,
     state: &mut ExecutionState,
     ctx: ExecutionContext,
 ) -> Result<Value, RuntimeError> {
     if let Value::Lambda {
-        args,
+        args: args_names,
         captured,
         body,
     } = lambda
     {
         let previous_constants = captured.clone();
 
-        for (arg, value) in args.iter().zip(leftover.into_iter()) {
+        for (arg, value) in args_names.iter().zip(arg_values.into_iter()) {
             state.constants.insert(arg.clone(), value.clone());
         }
 
@@ -334,6 +334,26 @@ pub fn eval(
                     let b = eval(*b, state, ctx)?.as_string()?;
                     Value::Bool(a == b)
                 }
+                crate::grammar::BinaryOperation::Lt => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Bool(a < b)
+                }
+                crate::grammar::BinaryOperation::Gt => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Bool(a > b)
+                }
+                crate::grammar::BinaryOperation::Lte => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Bool(a <= b)
+                }
+                crate::grammar::BinaryOperation::Gte => {
+                    let a = eval(*a, state, ctx)?.as_double()?;
+                    let b = eval(*b, state, ctx)?.as_double()?;
+                    Value::Bool(a >= b)
+                }
                 crate::grammar::BinaryOperation::Custon(_) => todo!(),
             }
         }
@@ -346,19 +366,24 @@ pub fn eval(
         Node::Call(name, arguments) => {
             let name = as_identifier(*name)?;
 
-            if let Some(function) = state.functions.get(&name).cloned() {
-                let args = arguments
-                    .into_iter()
-                    .map(|arg| eval(arg, state, ctx))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                return function.eval(args, state, ctx);
-            }
-
             let args = arguments
                 .into_iter()
                 .map(|arg| eval(arg, state, ctx))
                 .collect::<Result<Vec<_>, _>>()?;
+
+            if let Some(function) = state.functions.get(&name).cloned() {
+                return function.eval(args, state, ctx);
+            }
+
+            if let Some(value) = state.constants.get(&name) {
+                if let Value::Lambda { .. } = value {
+                    return eval_lambda(value.clone(), args, state, ctx);
+                }
+            }
+
+            if let Some(value) = try_builtin(&name, args.clone()) {
+                return value;
+            }
 
             return eval_as_command(name, args, ctx);
 
@@ -425,7 +450,7 @@ pub fn eval(
             } else {
                 eval(*else_branch, state, ctx)?
             }
-        },
+        }
     })
 }
 
