@@ -509,7 +509,8 @@ pub fn eval(
                     )?
                 }
                 crate::grammar::BinaryOperation::EnvAssign => {
-                    let var = eval(*a, state, ctx.clone())?.as_string()?;
+                    let var = as_identifier_even_if_function_call(*a)?;
+
                     let data = eval(*b, state, ctx.clone())?.as_string()?;
 
                     std::env::set_var(var, data);
@@ -543,17 +544,9 @@ pub fn eval(
                 .map(|arg| eval(arg, state, ctx.clone()))
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let name = match *name.clone() {
-                Node::String(s) => s,
-                Node::Indentifier(s) => s,
-                Node::Call(b, _) => {
-                    if let Node::String(s) = *b {
-                        s
-                    } else {
-                        return rte(format!("Invalid function name: {}", name.stringify()));
-                    }
-                }
-                _ => {
+            let name = match as_identifier_even_if_function_call(*name.clone()) {
+                Ok(s) => s,
+                Err(_) => {
                     let value = eval(*name, state, ctx.clone())?;
                     if let Value::Lambda { .. } = value {
                         return eval_lambda(value, args, state, ctx.clone());
@@ -702,6 +695,21 @@ fn as_identifier(node: Node) -> Result<String, RuntimeError> {
         Node::String(s) => Ok(s),
         _ => rte("Invalid identifier"),
     }
+}
+
+fn as_identifier_even_if_function_call(node: Node) -> Result<String, RuntimeError> {
+    Ok(match node {
+        Node::String(s) => s,
+        Node::Indentifier(s) => s,
+        Node::Call(b, _) => {
+            if let Node::String(s) = *b {
+                s
+            } else {
+                return rte("Ivalid indentifier".to_string());
+            }
+        }
+        _ => return rte("Invalid identifier"),
+    })
 }
 
 fn as_string(node: Node) -> Result<String, RuntimeError> {
