@@ -77,7 +77,7 @@ impl Function {
             });
         }
 
-        // let previous_constants = state.constants.clone();
+        let previous_constants = state.constants.clone();
 
         for (arg, value) in self.args.iter().zip(args.iter()) {
             state.constants.insert(arg.clone(), value.clone());
@@ -89,7 +89,7 @@ impl Function {
             new_e
         })?;
 
-        // state.constants = previous_constants;
+        state.constants = previous_constants;
 
         let leftover = args.into_iter().skip(self.args.len()).collect::<Vec<_>>();
 

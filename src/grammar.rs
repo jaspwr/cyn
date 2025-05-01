@@ -217,16 +217,20 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
         let (mut ts, condition) = lambda(ts.clone(), ctx)?;
 
         if !peek_and_compare(&ts, "then") {
-            // TODO error
-            panic!();
+            return Err(ParseError {
+                message: "Expected `then`".to_string(),
+                range: ts[0].range,
+            });
         }
         ts = ts[1..].to_vec();
 
         let (mut ts, then_branch) = lambda(ts.clone(), ctx)?;
 
         if !peek_and_compare(&ts, "else") {
-            // TODO error
-            panic!();
+            return Err(ParseError {
+                message: "Expected `else`".to_string(),
+                range: ts[0].range,
+            });
         }
         ts = ts[1..].to_vec();
 
@@ -334,7 +338,7 @@ left_accocitive_binary_infix_operator!(eq, eq_, concat,
     {"<=", BinaryOperation::Lte}
 );
 
-right_accocitive_binary_infix_operator!(concat, concat_, add,
+left_accocitive_binary_infix_operator!(concat, concat_, add,
     {"++", BinaryOperation::Concat}
 );
 
