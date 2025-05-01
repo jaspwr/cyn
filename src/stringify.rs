@@ -91,6 +91,7 @@ impl BinaryOperation {
             BinaryOperation::RangeInclusive => "..=".to_string(),
             BinaryOperation::Pipe => "|".to_string(),
             BinaryOperation::WriteFile => ">>".to_string(),
+            BinaryOperation::EnvAssign => "$=".to_string(),
             BinaryOperation::Custon(s) => s.clone(),
         }
     }

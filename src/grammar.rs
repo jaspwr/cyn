@@ -61,6 +61,7 @@ pub enum BinaryOperation {
     Range,
     RangeInclusive,
     WriteFile,
+    EnvAssign,
     Pipe,
     Custon(String),
 }
@@ -280,7 +281,8 @@ macro_rules! right_accocitive_binary_infix_operator {
 }
 
 left_accocitive_binary_infix_operator!(file, file_, pipe,
-    {">>", BinaryOperation::WriteFile}
+    {">>", BinaryOperation::WriteFile},
+    {"$=", BinaryOperation::EnvAssign}
 );
 
 left_accocitive_binary_infix_operator!(pipe, pipe_, bool_ops,

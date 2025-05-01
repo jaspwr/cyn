@@ -360,6 +360,12 @@ pub fn eval(
                 );
             }
 
+            for (key, value) in env::vars() {
+                if key == s {
+                    return Ok(Value::String(value));
+                }
+            }
+
             // return rte(format!("Undefined identifier: {}", s));
 
             return eval_as_command(s, vec![], ctx.clone());
@@ -480,6 +486,14 @@ pub fn eval(
                             ..ctx.clone()
                         },
                     )?
+                }
+                crate::grammar::BinaryOperation::EnvAssign => {
+                    let var = eval(*a, state, ctx.clone())?.as_string()?;
+                    let data = eval(*b, state, ctx.clone())?.as_string()?;
+
+                    std::env::set_var(var, data);
+
+                    Value::Void
                 }
             }
         }
@@ -605,6 +619,13 @@ fn range(
 fn as_identifier(node: Node) -> Result<String, RuntimeError> {
     match node {
         Node::Indentifier(s) => Ok(s),
+        Node::String(s) => Ok(s),
+        _ => rte("Invalid identifier"),
+    }
+}
+
+fn as_string(node: Node) -> Result<String, RuntimeError> {
+    match node {
         Node::String(s) => Ok(s),
         _ => rte("Invalid identifier"),
     }
