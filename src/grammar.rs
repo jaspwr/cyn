@@ -28,6 +28,10 @@ pub enum Node {
         else_branch: Box<Node>,
     },
     ArrayLiteral(Vec<Node>),
+    Import {
+        qualified: bool,
+        path: Box<Node>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -74,8 +78,7 @@ pub struct ParseError {
 }
 
 pub fn parse(ts: Tokens) -> Result<Ast, ParseError> {
-    let ctx = ParsingContext {
-    };
+    let ctx = ParsingContext {};
 
     let (ts, ast) = definition_list(ts, ctx)?;
 
@@ -90,13 +93,12 @@ pub fn parse(ts: Tokens) -> Result<Ast, ParseError> {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct ParsingContext {
-}
+struct ParsingContext {}
 
 fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     let mut nodes = vec![];
 
-    while let Ok((new_ts, node)) = assignment(ts.clone(), ctx) {
+    while let Ok((new_ts, node)) = import(ts.clone(), ctx) {
         ts = new_ts;
 
         while ts
@@ -120,6 +122,31 @@ fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast),
     }
 
     return Ok((ts, Node::DefinitionList(nodes)));
+}
+
+fn import(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+    if peek_and_compare(&ts, "use") {
+        let mut ts = ts[1..].to_vec();
+
+        let mut qualified = true;
+
+        if peek_and_compare(&ts, "unqualified") {
+            ts = ts[1..].to_vec();
+            qualified = false;
+        }
+
+        let (ts, path) = literal(ts, ctx)?;
+
+        return Ok((
+            ts,
+            Node::Import {
+                qualified,
+                path: Box::new(path),
+            },
+        ));
+    }
+
+    assignment(ts, ctx)
 }
 
 fn assignment(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
@@ -347,10 +374,7 @@ left_accocitive_binary_infix_operator!(range, _range, call,
 );
 
 fn call(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
-    let Ok((ts, first)) = brackets(
-        ts.clone(),
-        ctx,
-    ) else {
+    let Ok((ts, first)) = brackets(ts.clone(), ctx) else {
         return brackets(ts, ctx);
     };
 

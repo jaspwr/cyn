@@ -73,14 +73,16 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
         if kind == Some(TokenKind::ExpressionTerminator) {
             if tokens.is_empty() {
+                token_start = i;
                 return;
             }
         }
 
         if let Some(mut kind) = kind {
             match token {
-                "where" | "if" | "then" | "else" => kind = TokenKind::Keyword,
-                "-" => kind = TokenKind::Operator, // minus is allowed in identifiers
+                "where" | "if" | "then" | "else" | "use" | "unqualified" => kind = TokenKind::Keyword,
+                "-" => kind = TokenKind::Operator, // minus is allowed in identifiers; convert back
+                // if alone
                 _ => {}
             };
 

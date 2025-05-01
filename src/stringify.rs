@@ -67,6 +67,11 @@ impl Node {
                 then_branch.stringify(),
                 else_branch.stringify()
             ),
+            Node::Import { qualified, path } => format!(
+                "use{} {}",
+                if *qualified { " unqualified" } else { "" },
+                path.stringify()
+            ),
         }
     }
 }

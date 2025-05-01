@@ -1,6 +1,11 @@
-use std::{collections::HashMap, env, io::Write, process::Command};
+use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
 
-use crate::{builtins::try_builtin, grammar::Node, heapless};
+use crate::{
+    builtins::try_builtin,
+    grammar::{self, Node},
+    heapless, tokenizer,
+    utils::eval_string,
+};
 
 #[derive(Debug)]
 pub struct ExecutionState {
@@ -22,6 +27,7 @@ struct Function {
 pub struct ExecutionContext {
     pub piped: bool,
     pub piped_input: Option<String>,
+    pub function_prefix: Option<String>,
 }
 
 impl ExecutionContext {
@@ -29,6 +35,15 @@ impl ExecutionContext {
         Self {
             piped: false,
             piped_input: None,
+            function_prefix: None,
+        }
+    }
+
+    pub fn function_name(&self, name: String) -> String {
+        if let Some(prefix) = &self.function_prefix {
+            format!("{}.{}", prefix, name)
+        } else {
+            name
         }
     }
 }
@@ -349,7 +364,7 @@ pub fn eval(
                 return Ok(value.clone());
             }
 
-            if let Some(function) = state.functions.get(&s).cloned() {
+            if let Some(function) = state.functions.get(&ctx.function_name(s.clone())).cloned() {
                 return function.eval(
                     vec![],
                     state,
@@ -534,7 +549,11 @@ pub fn eval(
                 }
             };
 
-            if let Some(function) = state.functions.get(&name).cloned() {
+            if let Some(function) = state
+                .functions
+                .get(&ctx.function_name(name.clone()))
+                .cloned()
+            {
                 return function.eval(args, state, ctx.clone());
             }
 
@@ -558,7 +577,7 @@ pub fn eval(
             body,
             where_definitions,
         } => {
-            let name = as_identifier(*name)?;
+            let name = ctx.function_name(as_identifier(*name)?);
 
             let args = args
                 .into_iter()
@@ -612,6 +631,41 @@ pub fn eval(
                 eval(*then_branch, state, ctx.clone())?
             } else {
                 eval(*else_branch, state, ctx.clone())?
+            }
+        }
+        Node::Import { qualified, path } => {
+            let path = eval(*path, state, ctx)?.as_string()?;
+            let path_pathbuf = PathBuf::from(path.clone());
+            if !path_pathbuf.exists() {
+                return rte(format!("File {} does not exist", path));
+            }
+            let Some(module) = path_pathbuf
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+            else {
+                return rte(format!("Module in {} didn't have a valid name.", path));
+            };
+            let Ok(source) = std::fs::read_to_string(path_pathbuf) else {
+                return rte(format!("Failed to read file {}", path));
+            };
+
+            let tokens = tokenizer::tokenize(&source);
+
+            let mut ctx = ExecutionContext::new();
+
+            if qualified {
+                ctx.function_prefix = Some(module);
+            }
+
+            match grammar::parse(tokens) {
+                Ok(ast) => eval(ast, state, ctx)?,
+                Err(e) => {
+                    return Err(RuntimeError {
+                        message: format!("Syntax error: {}", e.message),
+                        callstack: vec![],
+                        range: Some(e.range),
+                    });
+                }
             }
         }
     })
