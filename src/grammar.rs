@@ -58,6 +58,7 @@ pub enum BinaryOperation {
     And,
     Or,
     Index,
+    Concat,
     Range,
     RangeInclusive,
     WriteFile,
@@ -202,7 +203,11 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
         }
         ts = ts[1..].to_vec();
 
-        let (ts, else_branch) = lambda(ts.clone(), ctx)?;
+        let (mut ts, else_branch) = lambda(ts.clone(), ctx)?;
+
+        while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
+            ts = ts[1..].to_vec();
+        }
 
         return Ok((
             ts,
@@ -294,12 +299,16 @@ right_accocitive_binary_infix_operator!(bool_ops, _bool_ops, eq,
     {"||", BinaryOperation::Or}
 );
 
-left_accocitive_binary_infix_operator!(eq, eq_, add,
+left_accocitive_binary_infix_operator!(eq, eq_, concat,
     {"==", BinaryOperation::Eq},
     {"<", BinaryOperation::Lt},
     {">", BinaryOperation::Gt},
     {"<=", BinaryOperation::Gte},
     {"<=", BinaryOperation::Lte}
+);
+
+left_accocitive_binary_infix_operator!(concat, concat_, add,
+    {"++", BinaryOperation::Concat}
 );
 
 left_accocitive_binary_infix_operator!(add, add_, mul,
@@ -475,6 +484,15 @@ fn peek_and_compare<'source>(ts: &'source Tokens, token: &str) -> bool {
         .map(|t| {
             // println!("{} == {}", t.token, token);
             t.token == token
+        })
+        .unwrap_or(false)
+}
+
+fn peek_and_compare_kind<'source>(ts: &'source Tokens, kind: TokenKind) -> bool {
+    peek(ts)
+        .map(|t| {
+            // println!("{} == {}", t.token, token);
+            t.kind == kind
         })
         .unwrap_or(false)
 }

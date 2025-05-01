@@ -87,6 +87,7 @@ impl BinaryOperation {
             BinaryOperation::And => "&&".to_string(),
             BinaryOperation::Or => "||".to_string(),
             BinaryOperation::Index => "!!".to_string(),
+            BinaryOperation::Concat => "++".to_string(),
             BinaryOperation::Range => "..".to_string(),
             BinaryOperation::RangeInclusive => "..=".to_string(),
             BinaryOperation::Pipe => "|".to_string(),

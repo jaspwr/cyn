@@ -1,7 +1,7 @@
 # This is the first cyn program.
 
-$h = ((2 + 2) * $double 2) # prints 8
-$double $x = $x * 2
+h = ((2 + 2) * $double 2)#prints 8
+double $x = $x * 2
 
 $add $a $b = 
 	$a + $b
@@ -12,9 +12,20 @@ runOn f a = f a
 
 arr = [1, 2, 3]
 
-bleh = if $h == 7
-	then asdfjlk
-	 else asdfjlk
+map f arr = map_ f arr (len arr)
+map_ f arr i =  if $i == 0
+	then []
+    else [$f ($arr !! ($i - 1))] ++ map_ $f $arr ($i - 1)
 
-main = runOn (λa -> $a * 2) 16
+bleh = if h == 7
+	then if h == 8
+		then h
+		else brucwbleh
+	else asdfjlk
 
+# main = runOn (λa -> $a * 2) 16
+
+
+# main = map double [1, 2, 3, 4]
+
+main = $bleh

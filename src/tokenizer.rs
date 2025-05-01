@@ -72,7 +72,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         };
 
         if kind == Some(TokenKind::ExpressionTerminator) {
-            if token.is_empty() {
+            if tokens.is_empty() {
                 return;
             }
         }
@@ -100,13 +100,15 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
     let mut in_string_literal = false;
 
     for (i, c) in source.char_indices() {
+        if c == '\n' || c == '\r' {
+            indentation = 0;
+            counting_indentation = true;
+            in_comment = false;
+        }
+
         if in_comment {
-            if c == '\n' || c == '\r' {
-                in_comment = false;
-            }
             append(i, last_category);
             last_category = CharCategory::None;
-
             continue;
         }
 
@@ -115,11 +117,6 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             append(i, last_category);
             last_category = CharCategory::None;
             continue;
-        }
-
-        if c == '\n' || c == '\r' {
-            indentation = 0;
-            counting_indentation = true;
         }
 
         if c == '"' {
@@ -139,11 +136,17 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
         if counting_indentation {
             if c.is_whitespace() {
-                indentation += 1;
+                if c == ' ' {
+                    indentation += 1;
+                }
+
+                if c == '\t' {
+                    indentation += 4;
+                }
             } else {
                 counting_indentation = false;
 
-                if indentation <= last_indentation {
+                if indentation < last_indentation || indentation == 0 {
                     last_category = CharCategory::EndExpression;
                     append(i, last_category);
                 }

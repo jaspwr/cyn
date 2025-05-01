@@ -495,6 +495,19 @@ pub fn eval(
 
                     Value::Void
                 }
+                crate::grammar::BinaryOperation::Concat => {
+                    let a = eval(*a, state, ctx.clone())?.as_array()?;
+                    let b = eval(*b, state, ctx.clone())?.as_array()?;
+
+                    if let Value::Array(mut a) = a {
+                        if let Value::Array(b) = b {
+                            a.extend(b);
+                            return Ok(Value::Array(a));
+                        }
+                    }
+
+                    panic!();
+                }
             }
         }
         Node::UnaryOperation(oper, a) => match oper {
