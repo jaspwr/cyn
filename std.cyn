@@ -16,6 +16,16 @@ sum = reduce 0 (λa b -> $a + $b)
 #? ```
 concat = reduce [] (λa b -> $a ++ $b)
 
+#? Reverse an array.
+#? ## Example
+#? ```cyn
+#? reverse [1, 2, 3] # [3, 2, 1]
+#? ```
+reverse arr = reverse_ $arr (len $arr)
+reverse_ arr i = if $i == 0
+	then []
+	else [$arr !! ($i - 1)] ++ reverse_ $arr ($i - 1)
+
 map f arr = map_ $f $arr 0
 map_ f arr i = if $i == len $arr
 	then []
@@ -31,7 +41,3 @@ reduce_ acc f arr i = if $i == len $arr
 	then $acc
 	else reduce_ ($f $acc ($arr !! $i)) $f $arr ($i + 1)
 
-reverse arr = reverse_ $arr (len $arr)
-reverse_ arr i = if $i == 0
-	then []
-	else [$arr !! ($i - 1)] ++ reverse_ $arr ($i - 1)

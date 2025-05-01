@@ -4,7 +4,6 @@ use crate::{
     builtins::try_builtin,
     grammar::{self, Node},
     heapless, tokenizer,
-    utils::eval_string,
 };
 
 #[derive(Debug)]
@@ -107,7 +106,7 @@ fn eval_lambda(
     state: &mut ExecutionState,
     ctx: ExecutionContext,
 ) -> Result<Value, RuntimeError> {
-    let lambda_string = lambda.as_string().unwrap_or_else(|_| "[λ]".to_string());
+    let lambda_string = lambda.as_string().unwrap_or_default();
 
     if let Value::Lambda {
         args: args_names,

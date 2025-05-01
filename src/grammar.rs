@@ -89,6 +89,15 @@ pub fn parse(ts: Tokens) -> Result<Ast, ParseError> {
         });
     }
 
+    if let Node::String(_) = ast.clone() {
+        return Ok(
+            Node::Call(
+                ast.clone().into(),
+                vec![],
+            )
+        )
+    }
+
     Ok(ast)
 }
 
