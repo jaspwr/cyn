@@ -543,9 +543,17 @@ pub fn eval(
                 .map(|arg| eval(arg, state, ctx.clone()))
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let name = match as_identifier(*name.clone()) {
-                Ok(name) => name,
-                Err(_) => {
+            let name = match *name.clone() {
+                Node::String(s) => s,
+                Node::Indentifier(s) => s,
+                Node::Call(b, _) => {
+                    if let Node::String(s) = *b {
+                        s
+                    } else {
+                        return rte(format!("Invalid function name: {}", name.stringify()));
+                    }
+                }
+                _ => {
                     let value = eval(*name, state, ctx.clone())?;
                     if let Value::Lambda { .. } = value {
                         return eval_lambda(value, args, state, ctx.clone());

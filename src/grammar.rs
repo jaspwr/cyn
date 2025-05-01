@@ -78,7 +78,9 @@ pub struct ParseError {
 }
 
 pub fn parse(ts: Tokens) -> Result<Ast, ParseError> {
-    let ctx = ParsingContext {};
+    let ctx = ParsingContext {
+        parsing_args: false,
+    };
 
     let (ts, ast) = definition_list(ts, ctx)?;
 
@@ -89,20 +91,18 @@ pub fn parse(ts: Tokens) -> Result<Ast, ParseError> {
         });
     }
 
-    if let Node::String(_) = ast.clone() {
-        return Ok(
-            Node::Call(
-                ast.clone().into(),
-                vec![],
-            )
-        )
-    }
+    // if let Node::String(_) = ast.clone() {
+    //     return Ok(Node::Call(ast.clone().into(), vec![]));
+    // }
 
     Ok(ast)
 }
 
 #[derive(Debug, Clone, Copy)]
-struct ParsingContext {}
+struct ParsingContext {
+    /// If `true`, blocks parsing single words as commands without arguments.
+    parsing_args: bool,
+}
 
 fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     let mut nodes = vec![];
@@ -144,7 +144,13 @@ fn import(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> 
             qualified = false;
         }
 
-        let (ts, path) = literal(ts, ctx)?;
+        let (ts, path) = literal(
+            ts,
+            ParsingContext {
+                parsing_args: true,
+                ..ctx.clone()
+            },
+        )?;
 
         return Ok((
             ts,
@@ -159,10 +165,22 @@ fn import(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> 
 }
 
 fn assignment(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
-    if let Ok((mut ts, name)) = literal(ts.clone(), ctx) {
+    if let Ok((mut ts, name)) = literal(
+        ts.clone(),
+        ParsingContext {
+            parsing_args: true,
+            ..ctx.clone()
+        },
+    ) {
         let mut args = vec![];
 
-        while let Ok((new_ts, arg)) = literal(ts.clone(), ctx) {
+        while let Ok((new_ts, arg)) = literal(
+            ts.clone(),
+            ParsingContext {
+                parsing_args: true,
+                ..ctx.clone()
+            },
+        ) {
             ts = new_ts;
             args.push(arg);
         }
@@ -199,7 +217,13 @@ fn lambda(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> 
 
         let mut args = vec![];
 
-        while let Ok((new_ts, arg)) = literal(ts.clone(), ctx) {
+        while let Ok((new_ts, arg)) = literal(
+            ts.clone(),
+            ParsingContext {
+                parsing_args: true,
+                ..ctx.clone()
+            },
+        ) {
             ts = new_ts;
             args.push(arg);
         }
@@ -394,7 +418,13 @@ fn call(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     let mut args = vec![];
 
     let mut fn_ts = ts.clone();
-    while let Ok((new_ts, arg)) = brackets(fn_ts.clone(), ctx) {
+    while let Ok((new_ts, arg)) = brackets(
+        fn_ts.clone(),
+        ParsingContext {
+            parsing_args: true,
+            ..ctx.clone()
+        },
+    ) {
         fn_ts = new_ts;
         args.push(arg);
     }
@@ -413,7 +443,13 @@ fn brackets(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError
             range: ts[0].range,
         };
 
-        let (ts, n) = lambda(ts[1..].to_vec(), ctx)?;
+        let (ts, n) = lambda(
+            ts[1..].to_vec(),
+            ParsingContext {
+                parsing_args: false,
+                ..ctx.clone()
+            },
+        )?;
 
         let Some(next) = ts.iter().next() else {
             return Err(uncolosed_error);
@@ -440,7 +476,13 @@ fn array(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErro
 
         let mut items = vec![];
 
-        while let Ok((new_ts, item)) = lambda(ts.clone(), ctx) {
+        while let Ok((new_ts, item)) = lambda(
+            ts.clone(),
+            ParsingContext {
+                parsing_args: false,
+                ..ctx.clone()
+            },
+        ) {
             ts = new_ts;
 
             items.push(item);
@@ -466,7 +508,7 @@ fn array(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErro
     }
 }
 
-fn literal(ts: Tokens, _ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn literal(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     let eof_err = Err(ParseError {
         message: "Unexpected end of input".to_string(),
         range: (0, 0),
@@ -477,7 +519,7 @@ fn literal(ts: Tokens, _ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError
     }
 
     if let Some(token) = peek(&ts) {
-        if token.kind == TokenKind::Indentifier {
+        if token.kind == TokenKind::Word || token.kind == TokenKind::QuotedString {
             let mut node = Node::String(token.token.to_string());
 
             if token
@@ -502,6 +544,13 @@ fn literal(ts: Tokens, _ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError
             {
                 if token.token.len() > 1 {
                     node = Node::Indentifier(token.token[1..].to_string());
+                }
+            } else {
+                if !ctx.parsing_args
+                    && token.token.chars().next().unwrap().is_alphabetic()
+                    && token.kind != TokenKind::QuotedString
+                {
+                    node = Node::Call(Box::new(node), vec![]);
                 }
             }
 

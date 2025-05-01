@@ -8,11 +8,12 @@ pub struct Token<'src> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     ExpressionTerminator,
-    Indentifier,
+    Word,
     Keyword,
     Operator,
     Literal,
     Bracket,
+    QuotedString,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,7 +64,8 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         let token = &source[token_start..i];
 
         let kind = match last_category {
-            CharCategory::AlphaNum | CharCategory::StringLiteral => Some(TokenKind::Indentifier),
+            CharCategory::AlphaNum => Some(TokenKind::Word),
+            CharCategory::StringLiteral => Some(TokenKind::QuotedString), 
             CharCategory::Operator => Some(TokenKind::Operator),
             CharCategory::Bracket => Some(TokenKind::Bracket),
             CharCategory::Whitespace => None,
