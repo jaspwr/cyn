@@ -1,7 +1,7 @@
-use std::{env, fs::read_to_string, path::PathBuf};
+use std::{env, path::PathBuf};
 
 use crate::{
-    interpreter::{rte, ExecutionState, RuntimeError, RuntimeState, Value},
+    interpreter::{rte, RuntimeError, RuntimeState, Value},
     utils::parse_args,
 };
 

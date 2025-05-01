@@ -12,7 +12,7 @@ use rustyline::validate::MatchingBracketValidator;
 use rustyline::{Completer, Helper, Hinter, Validator};
 use rustyline::{CompletionType, Config, EditMode, Editor};
 
-use crate::interpreter;
+use crate::interpreter::{self, ExecutionContext};
 use crate::utils::eval_string;
 
 use owo_colors::OwoColorize;
@@ -86,7 +86,7 @@ pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
             Ok(line) => {
                 let _ = rl.add_history_entry(line.as_str());
 
-                let out = eval_string(&line, &mut state);
+                let out = eval_string(&line, &mut state, ExecutionContext::new());
 
                 let message = match out {
                     Ok(value) => value.as_string().unwrap_or_default(),

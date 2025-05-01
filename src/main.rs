@@ -3,6 +3,7 @@ use std::env;
 use homedir::my_home;
 use interactive::start_interactive;
 use interpreter::{load_module, ExecutionContext};
+use utils::eval_string;
 
 pub mod tokenizer;
 pub mod grammar;
@@ -15,6 +16,11 @@ pub mod heapless;
 
 fn main() {
     let mut state = interpreter::ExecutionState::new();
+
+    eval_string(include_str!("../std.cyn"), &mut state, ExecutionContext {
+        function_prefix: Some("std".to_string()),
+        ..ExecutionContext::new()
+    }).unwrap();
 
     if let Ok(Some(home)) = my_home() {
         let cynrc = home.join(".cynrc");
