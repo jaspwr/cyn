@@ -57,15 +57,14 @@ pub fn start_interactive() -> Result<()> {
 
     let mut state = interpreter::ExecutionState::new();
 
-//     println!("  ....  .... ... .. ...  
-// .|   ''  '|.  |   ||  || 
-// ||        '|.|    ||  || 
-//  '|...'    '|    .||. ||.
-//         .. |             
-//          ''");
-//     println!("-------- v{} --------", env!("CARGO_PKG_VERSION"));
+    println!("  ....  .... ... .. ...  
+.|   ''  '|.  |   ||  || 
+||        '|.|    ||  || 
+ '|...'    '|    .||. ||.
+        .. |             
+         ''");
+    println!("-------- v{} --------", env!("CARGO_PKG_VERSION"));
 
-    rl.bind_sequence(KeyEvent::alt('l'), Cmd::Insert(1, "λ".to_string()));
 
     let config = Config::builder()
         .history_ignore_space(true)
@@ -80,6 +79,7 @@ pub fn start_interactive() -> Result<()> {
     };
     let mut rl = Editor::with_config(config)?;
     rl.set_helper(Some(h));
+    rl.bind_sequence(KeyEvent::alt('l'), Cmd::Insert(1, "λ".to_string()));
 
     loop {
         let readline = rl.readline(prompt(&state).as_str());
