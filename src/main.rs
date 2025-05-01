@@ -24,7 +24,7 @@ fn main() {
 
         println!("ast: {:#?}", ast);
 
-        if let Some((_, ast)) = ast {
+        if let Ok(ast) = ast {
             let mut state = interpreter::ExecutionState::new();
             let _ = interpreter::eval(ast, &mut state, ExecutionContext::new());
 

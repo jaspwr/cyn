@@ -58,19 +58,36 @@ pub enum BinaryOperation {
     Custon(String),
 }
 
-struct ParseError {
-    message: String,
-    range: (usize, usize),
+#[derive(Debug, Clone)]
+pub struct ParseError {
+    pub message: String,
+    pub range: (usize, usize),
 }
 
-pub fn parse(ts: Tokens) -> Option<(Tokens, Ast)> {
-    definition_list(ts)
+pub fn parse(ts: Tokens) -> Result<Ast, ParseError> {
+    let ctx = ParsingContext {
+    };
+
+    let (ts, ast) = definition_list(ts, ctx)?;
+
+    if !ts.is_empty() {
+        return Err(ParseError {
+            message: format!("Unexpected token: {}", ts[0].token),
+            range: ts[0].range,
+        });
+    }
+
+    Ok(ast)
 }
 
-fn definition_list(mut ts: Tokens) -> Option<(Tokens, Ast)> {
+#[derive(Debug, Clone, Copy)]
+struct ParsingContext {
+}
+
+fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     let mut nodes = vec![];
 
-    while let Some((new_ts, node)) = assignment(ts.clone()) {
+    while let Ok((new_ts, node)) = assignment(ts.clone(), ctx) {
         ts = new_ts;
 
         while ts
@@ -86,37 +103,37 @@ fn definition_list(mut ts: Tokens) -> Option<(Tokens, Ast)> {
     }
 
     if nodes.is_empty() {
-        return None;
+        return Ok((ts, Node::DefinitionList(vec![])));
     }
 
     if nodes.len() == 1 {
-        return Some((ts, nodes.pop().unwrap()));
+        return Ok((ts, nodes.pop().unwrap()));
     }
 
-    return Some((ts, Node::DefinitionList(nodes)));
+    return Ok((ts, Node::DefinitionList(nodes)));
 }
 
-fn assignment(ts: Tokens) -> Option<(Tokens, Ast)> {
-    if let Some((mut ts, name)) = literal(ts.clone()) {
+fn assignment(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+    if let Ok((mut ts, name)) = literal(ts.clone(), ctx) {
         let mut args = vec![];
 
-        while let Some((new_ts, arg)) = literal(ts.clone()) {
+        while let Ok((new_ts, arg)) = literal(ts.clone(), ctx) {
             ts = new_ts;
             args.push(arg);
         }
 
         if peek_and_compare(&ts, "=") {
-            let (mut ts, rhs) = lambda(ts[1..].to_vec())?;
+            let (mut ts, rhs) = lambda(ts[1..].to_vec(), ctx)?;
             let body = Box::new(rhs);
             let mut where_definitions = None;
 
             if peek_and_compare(&ts, "where") {
-                let (new_ts, rhs) = definition_list(ts[1..].to_vec())?;
+                let (new_ts, rhs) = definition_list(ts[1..].to_vec(), ctx)?;
                 ts = new_ts;
                 where_definitions = Some(Box::new(rhs));
             }
 
-            return Some((
+            return Ok((
                 ts,
                 Node::Assignment {
                     name: Box::new(name),
@@ -128,37 +145,40 @@ fn assignment(ts: Tokens) -> Option<(Tokens, Ast)> {
         }
     }
 
-    return lambda(ts);
+    return lambda(ts, ctx);
 }
 
-fn lambda(ts: Tokens) -> Option<(Tokens, Ast)> {
+fn lambda(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "λ") {
         let mut ts = ts[1..].to_vec();
 
         let mut args = vec![];
 
-        while let Some((new_ts, arg)) = literal(ts.clone()) {
+        while let Ok((new_ts, arg)) = literal(ts.clone(), ctx) {
             ts = new_ts;
             args.push(arg);
         }
 
         if peek_and_compare(&ts, "->") {
-            let (ts, rhs) = lambda(ts[1..].to_vec())?;
-            return Some((
+            let (ts, rhs) = lambda(ts[1..].to_vec(), ctx)?;
+            return Ok((
                 ts,
-                Node::Lambda { args, body: Box::new(rhs) },
+                Node::Lambda {
+                    args,
+                    body: Box::new(rhs),
+                },
             ));
         }
     }
 
-    if_then_else(ts)
+    if_then_else(ts, ctx)
 }
 
-fn if_then_else(mut ts: Tokens) -> Option<(Tokens, Ast)> {
+fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "if") {
         ts = ts[1..].to_vec();
 
-        let (mut ts, condition) = lambda(ts.clone())?;
+        let (mut ts, condition) = lambda(ts.clone(), ctx)?;
 
         if !peek_and_compare(&ts, "then") {
             // TODO error
@@ -166,7 +186,7 @@ fn if_then_else(mut ts: Tokens) -> Option<(Tokens, Ast)> {
         }
         ts = ts[1..].to_vec();
 
-        let (mut ts, then_branch) = lambda(ts.clone())?;
+        let (mut ts, then_branch) = lambda(ts.clone(), ctx)?;
 
         if !peek_and_compare(&ts, "else") {
             // TODO error
@@ -174,9 +194,9 @@ fn if_then_else(mut ts: Tokens) -> Option<(Tokens, Ast)> {
         }
         ts = ts[1..].to_vec();
 
-        let (ts, else_branch) = lambda(ts.clone())?;
+        let (ts, else_branch) = lambda(ts.clone(), ctx)?;
 
-        return Some((
+        return Ok((
             ts,
             Node::IfThenElse {
                 condition: Box::new(condition),
@@ -185,41 +205,40 @@ fn if_then_else(mut ts: Tokens) -> Option<(Tokens, Ast)> {
             },
         ));
     } else {
-        eq(ts)
+        eq(ts, ctx)
     }
 }
 
-
 macro_rules! left_accocitive_binary_infix_operator {
     ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
-        fn $name(ts: Tokens) -> Option<(Tokens, Ast)> {
-            let (ts, lhs) = $next(ts)?;
+        fn $name(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+            let (ts, lhs) = $next(ts, ctx)?;
 
-            $alt(lhs, ts)
+            $alt(lhs, ts, ctx)
         }
 
-        fn $alt(lhs: Ast, ts: Tokens) -> Option<(Tokens, Ast)> {
+        fn $alt(lhs: Ast, ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
             $(
                 if peek_and_compare(&ts, $comp) {
-                    let (ts, rhs) = $next(ts[1..].to_vec())?;
+                    let (ts, rhs) = $next(ts[1..].to_vec(), ctx)?;
 
                     let this_oper_res =
                         Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
 
-                    if let Some(r) = $alt(this_oper_res.clone(), ts.clone()) {
-                        return Some(r);
+                    if let Ok(r) = $alt(this_oper_res.clone(), ts.clone(), ctx) {
+                        return Ok(r);
                     }
 
-                    return Some((ts, this_oper_res));
+                    return Ok((ts, this_oper_res));
                 }
             )+
 
-            Some((ts, lhs))
+            Ok((ts, lhs))
         }
     };
 }
 
-left_accocitive_binary_infix_operator!(eq, eq_, add, 
+left_accocitive_binary_infix_operator!(eq, eq_, add,
     {"==", BinaryOperation::Eq},
     {"<", BinaryOperation::Lt},
     {">", BinaryOperation::Gt},
@@ -237,15 +256,15 @@ left_accocitive_binary_infix_operator!(mul, mul_, unary_minus,
     {"//", BinaryOperation::Div}
 );
 
-fn unary_minus(ts: Tokens) -> Option<(Tokens, Ast)> {
+fn unary_minus(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "-") {
-        let (ts, n) = pow(ts[1..].to_vec())?;
-        Some((
+        let (ts, n) = pow(ts[1..].to_vec(), ctx)?;
+        Ok((
             ts,
             Node::UnaryOperation(UnaryOperation::Negate, Box::new(n)),
         ))
     } else {
-        pow(ts)
+        pow(ts, ctx)
     }
 }
 
@@ -253,47 +272,64 @@ left_accocitive_binary_infix_operator!(pow, pow_, call,
     {"**", BinaryOperation::Pow}
 );
 
-fn call(ts: Tokens) -> Option<(Tokens, Ast)> {
-    let Some((ts, first)) = literal(ts.clone()) else {
-        return brackets(ts);
+fn call(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+    let Ok((ts, first)) = brackets(
+        ts.clone(),
+        ctx,
+    ) else {
+        return brackets(ts, ctx);
     };
 
     let mut args = vec![];
 
     let mut fn_ts = ts.clone();
-    while let Some((new_ts, arg)) = brackets(fn_ts.clone()) {
+    while let Ok((new_ts, arg)) = brackets(fn_ts.clone(), ctx) {
         fn_ts = new_ts;
         args.push(arg);
     }
 
     if !args.is_empty() {
-        return Some((fn_ts, Node::Call(Box::new(first), args)));
+        return Ok((fn_ts, Node::Call(Box::new(first), args)));
     }
 
-    Some((ts, first))
+    Ok((ts, first))
 }
 
-fn brackets(ts: Tokens) -> Option<(Tokens, Ast)> {
+fn brackets(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "(") {
-        let (ts, n) = lambda(ts[1..].to_vec())?;
+        let uncolosed_error = ParseError {
+            message: "Expected `)`".to_string(),
+            range: ts[0].range,
+        };
 
-        if ts.iter().next()?.token == ")" {
-            Some((ts[1..].to_vec(), n))
+        let (ts, n) = lambda(ts[1..].to_vec(), ctx)?;
+
+        let Some(next) = ts.iter().next() else {
+            return Err(uncolosed_error);
+        };
+
+        if next.token == ")" {
+            Ok((ts[1..].to_vec(), n))
         } else {
-            None
+            Err(uncolosed_error)
         }
     } else {
-        array(ts)
+        array(ts, ctx)
     }
 }
 
-fn array(mut ts: Tokens) -> Option<(Tokens, Ast)> {
+fn array(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "[") {
+        let uncolosed_error = ParseError {
+            message: "Expected `]`".to_string(),
+            range: ts[0].range,
+        };
+
         ts = ts[1..].to_vec();
 
         let mut items = vec![];
 
-        while let Some((new_ts, item)) = lambda(ts.clone()) {
+        while let Ok((new_ts, item)) = lambda(ts.clone(), ctx) {
             ts = new_ts;
 
             items.push(item);
@@ -305,20 +341,28 @@ fn array(mut ts: Tokens) -> Option<(Tokens, Ast)> {
             }
         }
 
-        if ts.iter().next()?.token == "]" {
-            Some((ts[1..].to_vec(), Node::ArrayLiteral(items)))
+        let Some(next) = ts.iter().next() else {
+            return Err(uncolosed_error);
+        };
+
+        if next.token == "]" {
+            Ok((ts[1..].to_vec(), Node::ArrayLiteral(items)))
         } else {
-            // TODO error
-            panic!();
+            Err(uncolosed_error)
         }
     } else {
-        literal(ts)
+        literal(ts, ctx)
     }
 }
 
-fn literal(ts: Tokens) -> Option<(Tokens, Ast)> {
+fn literal(ts: Tokens, _ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+    let eof_err = Err(ParseError {
+        message: "Unexpected end of input".to_string(),
+        range: (0, 0),
+    });
+
     if ts.is_empty() {
-        return None;
+        return eof_err;
     }
 
     if let Some(token) = peek(&ts) {
@@ -350,11 +394,11 @@ fn literal(ts: Tokens) -> Option<(Tokens, Ast)> {
                 }
             }
 
-            return Some((ts[1..].to_vec(), node));
+            return Ok((ts[1..].to_vec(), node));
         }
     }
 
-    None
+    return eof_err;
 }
 
 fn peek<'source>(ts: &'source Tokens) -> Option<&'source Token<'source>> {

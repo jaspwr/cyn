@@ -82,6 +82,8 @@ fn eval_lambda(
     state: &mut ExecutionState,
     ctx: ExecutionContext,
 ) -> Result<Value, RuntimeError> {
+    let lambda_string = lambda.as_string().unwrap_or_else(|_| "[λ]".to_string());
+
     if let Value::Lambda {
         args: args_names,
         captured,
@@ -96,10 +98,9 @@ fn eval_lambda(
 
         state.constants.extend(captured);
 
-        let body_string = body.stringify();
         let ret = eval(*body, state, ctx).map_err(|e| {
             let mut new_e = e.clone();
-            new_e.callstack.push(body_string.clone());
+            new_e.callstack.push(lambda_string.clone());
             new_e
         })?;
 
@@ -230,6 +231,7 @@ impl Value {
                 s.trim().parse::<f64>().map_err(|_| RuntimeError {
                     message: format!("Recieved {}. expected double", s),
                     callstack: vec![],
+                    range: None,
                 })
             }),
         }
@@ -267,14 +269,16 @@ struct RuntimeState {}
 
 #[derive(Debug, Clone)]
 pub struct RuntimeError {
-    callstack: Vec<String>,
-    message: String,
+    pub callstack: Vec<String>,
+    pub message: String,
+    pub range: Option<(usize, usize)>,
 }
 
 pub fn rte<T>(message: impl ToString) -> Result<T, RuntimeError> {
     Err(RuntimeError {
         message: message.to_string(),
         callstack: vec![],
+        range: None,
     })
 }
 
@@ -364,12 +368,22 @@ pub fn eval(
             }
         },
         Node::Call(name, arguments) => {
-            let name = as_identifier(*name)?;
-
             let args = arguments
                 .into_iter()
                 .map(|arg| eval(arg, state, ctx))
                 .collect::<Result<Vec<_>, _>>()?;
+
+            let name = match as_identifier(*name.clone()) {
+                Ok(name) => name,
+                Err(_) => {
+                    let value = eval(*name, state, ctx)?;
+                    if let Value::Lambda { .. } = value {
+                        return eval_lambda(value, args, state, ctx);
+                    } else {
+                        return rte(format!("Invalid function name: {}", value.as_string()?));
+                    }
+                }
+            };
 
             if let Some(function) = state.functions.get(&name).cloned() {
                 return function.eval(args, state, ctx);
