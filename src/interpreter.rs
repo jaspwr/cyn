@@ -1,6 +1,6 @@
-use std::{collections::HashMap, io::Write, process::Command};
+use std::{collections::HashMap, env, io::Write, process::Command};
 
-use crate::{builtins::try_builtin, grammar::Node};
+use crate::{builtins::try_builtin, grammar::Node, heapless};
 
 #[derive(Debug)]
 pub struct ExecutionState {
@@ -142,7 +142,7 @@ fn eval_as_command(
     } else {
         cmd.stdin(std::process::Stdio::inherit());
     }
-        
+
     let cmd = cmd.spawn();
 
     if let Err(e) = cmd {
@@ -184,7 +184,7 @@ impl ExecutionState {
         Self {
             functions: HashMap::new(),
             constants: HashMap::new(),
-            runtime_state: RuntimeState {},
+            runtime_state: RuntimeState::new(),
         }
     }
 
@@ -304,7 +304,23 @@ impl Value {
 
 #[repr(C)]
 #[derive(Debug)]
-struct RuntimeState {}
+pub struct RuntimeState {
+    pub working_directory: heapless::Str<1024>,
+}
+
+impl RuntimeState {
+    pub fn new() -> Self {
+        Self {
+            working_directory: heapless::Str::from_str(
+                env::current_dir()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap_or_default(),
+            )
+            .unwrap(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct RuntimeError {
@@ -334,7 +350,14 @@ pub fn eval(
             }
 
             if let Some(function) = state.functions.get(&s).cloned() {
-                return function.eval(vec![], state, ExecutionContext { piped: true, ..ctx.clone() });
+                return function.eval(
+                    vec![],
+                    state,
+                    ExecutionContext {
+                        piped: true,
+                        ..ctx.clone()
+                    },
+                );
             }
 
             // return rte(format!("Undefined identifier: {}", s));
@@ -343,7 +366,10 @@ pub fn eval(
         }
         Node::DoubleLiteral(d) => Value::Double(d),
         Node::BinaryOperation(oper, a, b) => {
-            let ctx = ExecutionContext { piped: true, ..ctx.clone() };
+            let ctx = ExecutionContext {
+                piped: true,
+                ..ctx.clone()
+            };
 
             match oper {
                 crate::grammar::BinaryOperation::Add => {
@@ -446,11 +472,15 @@ pub fn eval(
                 }
                 crate::grammar::BinaryOperation::Pipe => {
                     let data = eval(*a, state, ctx.clone())?.as_string()?;
-                    eval(*b, state, ExecutionContext {
-                        piped_input: Some(data),
-                        ..ctx.clone()
-                    })?
-                },
+                    eval(
+                        *b,
+                        state,
+                        ExecutionContext {
+                            piped_input: Some(data),
+                            ..ctx.clone()
+                        },
+                    )?
+                }
             }
         }
         Node::UnaryOperation(oper, a) => match oper {
@@ -487,7 +517,7 @@ pub fn eval(
                 }
             }
 
-            if let Some(value) = try_builtin(&name, args.clone()) {
+            if let Some(value) = try_builtin(&name, args.clone(), &mut state.runtime_state) {
                 return value;
             }
 

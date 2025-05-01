@@ -10,6 +10,7 @@ pub mod interactive;
 pub mod utils;
 pub mod stringify;
 pub mod builtins;
+pub mod heapless;
 
 fn main() {
     if env::args().len() == 2 {

@@ -161,6 +161,26 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             category = CharCategory::Operator;
         }
 
+        // For paths
+        if c == '/'
+            && source.len() > i + 1
+            && categorize_char(source[i + 1..].chars().next().unwrap()) == CharCategory::AlphaNum
+        {
+            category = CharCategory::AlphaNum;
+        }
+
+        // For range operator
+        if c == '.'
+            && source.len() > i + 1
+            && source[i + 1..].chars().next().unwrap() == '.'
+        {
+            category = CharCategory::Operator;
+        }
+        if c == '.' && last_category == CharCategory::Operator
+        {
+            category = CharCategory::Operator;
+        }
+
         if category == last_category && last_category != CharCategory::Bracket {
             continue;
         }

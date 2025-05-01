@@ -10,6 +10,14 @@ pub fn start_interactive() -> Result<()> {
 
     let mut state = interpreter::ExecutionState::new();
 
+//     println!("  ....  .... ... .. ...  
+// .|   ''  '|.  |   ||  || 
+// ||        '|.|    ||  || 
+//  '|...'    '|    .||. ||.
+//         .. |             
+//          ''");
+//     println!("-------- v{} --------", env!("CARGO_PKG_VERSION"));
+
     loop {
         let readline = rl.readline(">> ");
         match readline {
