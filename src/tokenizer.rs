@@ -189,6 +189,12 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         {
             category = CharCategory::Operator;
         }
+
+        // Allow prime in identifiers. E.g. `x'` or `x''`
+        if c == '\'' && last_category == CharCategory::AlphaNum
+        {
+            category = CharCategory::AlphaNum;
+        }
         
         // Variables
         if c == '$'
