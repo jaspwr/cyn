@@ -327,7 +327,10 @@ right_associtive_binary_infix_operator!(semicolon, semicolon_, lambda,
     {";", BinaryOperation::SemiColon}
 );
 
-fn lambda<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn lambda<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "λ") {
         let mut ts = &ts[1..];
 
@@ -359,7 +362,10 @@ fn lambda<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t,
     control_flow_statements(ts, ctx)
 }
 
-fn control_flow_statements<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn control_flow_statements<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "return") {
         let (ts, value) = lambda(&ts[1..], ctx)?;
         return Ok((ts, Node::Return(Box::new(value))));
@@ -381,7 +387,10 @@ fn control_flow_statements<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> R
     if_then_else(ts, ctx)
 }
 
-fn if_then_else<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn if_then_else<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "if") {
         ts = &ts[1..];
 
@@ -412,7 +421,10 @@ fn if_then_else<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(
     }
 }
 
-fn while_loop<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn while_loop<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "while") {
         ts = &ts[1..];
 
@@ -438,7 +450,10 @@ fn while_loop<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(To
     }
 }
 
-fn for_loop<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn for_loop<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "for") {
         ts = &ts[1..];
 
@@ -515,7 +530,10 @@ left_associtive_binary_infix_operator!(mul, mul_, unary_minus,
     {"//", BinaryOperation::Div}
 );
 
-fn unary_minus<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn unary_minus<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "-") {
         let (ts, n) = pow(&ts[1..], ctx)?;
         Ok((
@@ -540,7 +558,10 @@ left_associtive_binary_infix_operator!(range, _range, call,
     {"..=", BinaryOperation::RangeInclusive}
 );
 
-fn call<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn call<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     let Ok((ts, first)) = brackets(ts.clone(), ctx) else {
         return brackets(ts, ctx);
     };
@@ -566,7 +587,10 @@ fn call<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, '
     Ok((ts, first))
 }
 
-fn brackets<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn brackets<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "(") {
         let uncolosed_error = ParseError {
             message: "Expected `)`".to_string(),
@@ -595,7 +619,10 @@ fn brackets<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'
     }
 }
 
-fn array<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn array<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "[") {
         let uncolosed_error = ParseError {
             message: "Expected `]`".to_string(),

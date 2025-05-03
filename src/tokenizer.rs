@@ -30,7 +30,7 @@ enum CharCategory {
 
 fn categorize_char(c: char) -> CharCategory {
     match c {
-        '+' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | '~' | 'λ' | '>' | '<' | '@' | ','
+        '+' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | 'λ' | '>' | '<' | '@' | ','
         | '?' | ':' | ';' | '$' => {
             return CharCategory::Operator;
         }
@@ -40,7 +40,7 @@ fn categorize_char(c: char) -> CharCategory {
         _ => {}
     }
 
-    if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' {
+    if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '~' {
         return CharCategory::AlphaNum;
     } else if c.is_whitespace() {
         return CharCategory::Whitespace;

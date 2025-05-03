@@ -14,6 +14,7 @@ pub mod utils;
 pub mod stringify;
 pub mod builtins;
 pub mod heapless;
+mod bytecode;
 
 fn main() {
     let mut state = interpreter::ExecutionState::new();
