@@ -704,6 +704,24 @@ pub fn eval(
 
             Value::Array(values)
         }
+        Node::For { var, range, body } => {
+            let mut values = Vec::with_capacity(10);
+
+            let previous_constants = state.constants.clone();
+
+            let var = as_identifier_even_if_function_call(*var)?;
+
+            if let Value::Array(arr) = eval(*range.clone(), state, ctx.clone())?.as_array()? {
+                for value in arr.into_iter() {
+                    state.constants.insert(var.clone(), value.clone());
+                    values.push(eval(*body.clone(), state, ctx.clone())?);
+                }
+            }
+
+            state.constants = previous_constants;
+
+            Value::Array(values)
+        }
     })
 }
 

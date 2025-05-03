@@ -31,6 +31,11 @@ pub enum Node {
         condition: Box<Node>,
         body: Box<Node>,
     },
+    For {
+        var: Box<Node>,
+        range: Box<Node>,
+        body: Box<Node>,
+    },
     ArrayLiteral(Vec<Node>),
     Import {
         qualified: bool,
@@ -145,6 +150,18 @@ macro_rules! right_associtive_binary_infix_operator {
                 range: (0, 0),
             })
         }
+    };
+}
+
+macro_rules! expect_exact_token {
+    ($token:expr, $ts:expr) => {
+        if !peek_and_compare(&$ts, $token) {
+            return Err(ParseError {
+                message: format!("Expected `{}`", $token),
+                range: $ts[0].range,
+            });
+        }
+        $ts = $ts[1..].to_vec();
     };
 }
 
@@ -325,23 +342,11 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
 
         let (mut ts, condition) = lambda(ts.clone(), ctx)?;
 
-        if !peek_and_compare(&ts, "then") {
-            return Err(ParseError {
-                message: "Expected `then`".to_string(),
-                range: ts[0].range,
-            });
-        }
-        ts = ts[1..].to_vec();
+        expect_exact_token!("then", ts);
 
         let (mut ts, then_branch) = lambda(ts.clone(), ctx)?;
 
-        if !peek_and_compare(&ts, "else") {
-            return Err(ParseError {
-                message: "Expected `else`".to_string(),
-                range: ts[0].range,
-            });
-        }
-        ts = ts[1..].to_vec();
+        expect_exact_token!("else", ts);
 
         let (mut ts, else_branch) = lambda(ts.clone(), ctx)?;
 
@@ -358,23 +363,17 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
             },
         ));
     } else {
-        while_(ts, ctx)
+        while_loop(ts, ctx)
     }
 }
 
-fn while_(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn while_loop(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "while") {
         ts = ts[1..].to_vec();
 
         let (mut ts, condition) = lambda(ts.clone(), ctx)?;
 
-        if !peek_and_compare(&ts, "do") {
-            return Err(ParseError {
-                message: "Expected `do`".to_string(),
-                range: ts[0].range,
-            });
-        }
-        ts = ts[1..].to_vec();
+        expect_exact_token!("do", ts);
 
         let (mut ts, body) = lambda(ts.clone(), ctx)?;
 
@@ -386,6 +385,37 @@ fn while_(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErr
             ts,
             Node::While {
                 condition: Box::new(condition),
+                body: Box::new(body),
+            },
+        ));
+    } else {
+        for_loop(ts, ctx)
+    }
+}
+
+fn for_loop(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+    if peek_and_compare(&ts, "for") {
+        ts = ts[1..].to_vec();
+
+        let (mut ts, var) = brackets(ts.clone(), ctx)?;
+
+        expect_exact_token!("in", ts);
+
+        let (mut ts, range) = lambda(ts.clone(), ctx)?;
+
+        expect_exact_token!("do", ts);
+
+        let (mut ts, body) = lambda(ts.clone(), ctx)?;
+
+        while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
+            ts = ts[1..].to_vec();
+        }
+
+        return Ok((
+            ts,
+            Node::For {
+                var: Box::new(var),
+                range: Box::new(range),
                 body: Box::new(body),
             },
         ));
@@ -423,7 +453,7 @@ left_associtive_binary_infix_operator!(eq, eq_, concat,
     {"==", BinaryOperation::Eq},
     {"<", BinaryOperation::Lt},
     {">", BinaryOperation::Gt},
-    {"<=", BinaryOperation::Gte},
+    {">=", BinaryOperation::Gte},
     {"<=", BinaryOperation::Lte}
 );
 

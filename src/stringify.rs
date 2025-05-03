@@ -62,7 +62,7 @@ impl Node {
                 then_branch,
                 else_branch,
             } => format!(
-                "if {} then {} else {}",
+                "(if {} then {} else {})",
                 condition.stringify(),
                 then_branch.stringify(),
                 else_branch.stringify()
@@ -74,8 +74,16 @@ impl Node {
             ),
             Node::While { condition, body } =>  {
                 format!(
-                    "while {} do {}",
+                    "(while {} do {})",
                     condition.stringify(),
+                    body.stringify()
+                )
+            }
+            Node::For { var, range, body } => {
+                format!(
+                    "(for {} in {} do {})",
+                    var.stringify(),
+                    range.stringify(),
                     body.stringify()
                 )
             }

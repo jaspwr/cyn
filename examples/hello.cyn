@@ -30,7 +30,7 @@ main =
 	blehs := 3;
 
 	while $blehs < 20 do {
-		blehs += 1;
+		blehs *= 2;
 		println $blehs
 	};
 
@@ -38,6 +38,7 @@ main =
 		then println "h is 8"
 		else println "h is not 8";
 
+	for i in 0..20 do println $i;
 
 	println "c"
 
