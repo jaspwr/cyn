@@ -118,10 +118,25 @@ fn ls(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     let all = args.short_flags.contains("a") || args.long_flags.contains("all");
 
-    let entries = std::fs::read_dir(path_pathbuf)
+    let files = std::fs::read_dir(&path_pathbuf)
         .or(rte("Failed to read directory"))?
         .filter_map(|entry| entry.ok())
-        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .filter(|e| e.path().is_file())
+        .map(|entry| entry.file_name().to_string_lossy().to_string());
+
+    let dirs = std::fs::read_dir(&path_pathbuf)
+        .or(rte("Failed to read directory"))?
+        .filter_map(|entry| entry.ok())
+        .filter(|e| e.path().is_dir())
+        .map(|entry| {
+            let mut name = entry.file_name().to_string_lossy().to_string();
+            if entry.path().is_dir() {
+                name.push('/');
+            }
+            name
+        });
+
+    let entries = dirs.chain(files)
         .filter(|name| !(!all && name.chars().next() == Some('.')))
         .collect::<Vec<_>>()
         .join("\n");
@@ -195,8 +210,7 @@ fn rm(args: Vec<Value>) -> Result<Value, RuntimeError> {
         }
     }
 
-    let confirm = !args.long_flags.contains("no-confirm")
-        && !args.short_flags.contains("n");
+    let confirm = !args.long_flags.contains("no-confirm") && !args.short_flags.contains("n");
 
     if confirm {
         println!("Removing {}. Are you sure? (y/n)", args.files.join(" "));
