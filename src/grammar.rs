@@ -68,6 +68,7 @@ pub enum BinaryOperation {
     WriteFile,
     EnvAssign,
     Pipe,
+    SemiColon,
     Custon(String),
 }
 
@@ -75,6 +76,69 @@ pub enum BinaryOperation {
 pub struct ParseError {
     pub message: String,
     pub range: (usize, usize),
+}
+
+macro_rules! left_associtive_binary_infix_operator {
+    ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
+        fn $name(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+            let (ts, lhs) = $next(ts, ctx)?;
+
+            $alt(lhs, ts, ctx)
+        }
+
+        fn $alt(lhs: Ast, ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+            $(
+                if peek_and_compare(&ts, $comp) {
+                    let (ts, rhs) = $next(ts[1..].to_vec(), ctx)?;
+
+                    let this_oper_res =
+                        Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
+
+                    if let Ok(r) = $alt(this_oper_res.clone(), ts.clone(), ctx) {
+                        return Ok(r);
+                    }
+
+                    return Ok((ts, this_oper_res));
+                }
+            )+
+
+            Ok((ts, lhs))
+        }
+    };
+}
+
+macro_rules! right_associtive_binary_infix_operator {
+    ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
+        fn $name(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+            let (ts, lhs) = $next(ts, ctx)?;
+
+            let mut expr = (ts, lhs);
+
+            while let Ok(new_expr) = $alt(expr.1.clone(), expr.0.clone(), ctx) {
+                expr = new_expr;
+            }
+
+            Ok(expr)
+        }
+
+        fn $alt(lhs: Ast, ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+            $(
+                if peek_and_compare(&ts, $comp) {
+                    let (ts, rhs) = $next(ts[1..].to_vec(), ctx)?;
+
+                    let this_oper_res =
+                        Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
+
+                    return Ok((ts, this_oper_res));
+                }
+            )+
+
+            Err(ParseError {
+                message: format!("Expected one of: {}", [$($comp.to_string()),+].join(", ")),
+                range: (0, 0),
+            })
+        }
+    };
 }
 
 pub fn parse(ts: Tokens) -> Result<Ast, ParseError> {
@@ -107,7 +171,7 @@ struct ParsingContext {
 fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     let mut nodes = vec![];
 
-    while let Ok((new_ts, node)) = import(ts.clone(), ctx) {
+    while let Ok((new_ts, node)) = semicolon(ts.clone(), ctx) {
         ts = new_ts;
 
         while ts
@@ -132,6 +196,10 @@ fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast),
 
     return Ok((ts, Node::DefinitionList(nodes)));
 }
+
+left_associtive_binary_infix_operator!(semicolon, semicolon_, import,
+    {";", BinaryOperation::SemiColon}
+);
 
 fn import(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "use") {
@@ -286,84 +354,22 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
     }
 }
 
-macro_rules! left_accocitive_binary_infix_operator {
-    ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
-        fn $name(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
-            let (ts, lhs) = $next(ts, ctx)?;
 
-            $alt(lhs, ts, ctx)
-        }
-
-        fn $alt(lhs: Ast, ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
-            $(
-                if peek_and_compare(&ts, $comp) {
-                    let (ts, rhs) = $next(ts[1..].to_vec(), ctx)?;
-
-                    let this_oper_res =
-                        Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
-
-                    if let Ok(r) = $alt(this_oper_res.clone(), ts.clone(), ctx) {
-                        return Ok(r);
-                    }
-
-                    return Ok((ts, this_oper_res));
-                }
-            )+
-
-            Ok((ts, lhs))
-        }
-    };
-}
-
-macro_rules! right_accocitive_binary_infix_operator {
-    ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
-        fn $name(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
-            let (ts, lhs) = $next(ts, ctx)?;
-
-            let mut expr = (ts, lhs);
-
-            while let Ok(new_expr) = $alt(expr.1.clone(), expr.0.clone(), ctx) {
-                expr = new_expr;
-            }
-
-            Ok(expr)
-        }
-
-        fn $alt(lhs: Ast, ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
-            $(
-                if peek_and_compare(&ts, $comp) {
-                    let (ts, rhs) = $next(ts[1..].to_vec(), ctx)?;
-
-                    let this_oper_res =
-                        Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
-
-                    return Ok((ts, this_oper_res));
-                }
-            )+
-
-            Err(ParseError {
-                message: format!("Expected one of: {}", [$($comp.to_string()),+].join(", ")),
-                range: (0, 0),
-            })
-        }
-    };
-}
-
-left_accocitive_binary_infix_operator!(file, file_, pipe,
+left_associtive_binary_infix_operator!(file, file_, pipe,
     {">>", BinaryOperation::WriteFile},
     {"$=", BinaryOperation::EnvAssign}
 );
 
-left_accocitive_binary_infix_operator!(pipe, pipe_, bool_ops,
+left_associtive_binary_infix_operator!(pipe, pipe_, bool_ops,
     {"|", BinaryOperation::Pipe}
 );
 
-right_accocitive_binary_infix_operator!(bool_ops, _bool_ops, eq,
+right_associtive_binary_infix_operator!(bool_ops, _bool_ops, eq,
     {"&&", BinaryOperation::And},
     {"||", BinaryOperation::Or}
 );
 
-left_accocitive_binary_infix_operator!(eq, eq_, concat,
+left_associtive_binary_infix_operator!(eq, eq_, concat,
     {"==", BinaryOperation::Eq},
     {"<", BinaryOperation::Lt},
     {">", BinaryOperation::Gt},
@@ -371,16 +377,16 @@ left_accocitive_binary_infix_operator!(eq, eq_, concat,
     {"<=", BinaryOperation::Lte}
 );
 
-left_accocitive_binary_infix_operator!(concat, concat_, add,
+left_associtive_binary_infix_operator!(concat, concat_, add,
     {"++", BinaryOperation::Concat}
 );
 
-left_accocitive_binary_infix_operator!(add, add_, mul,
+left_associtive_binary_infix_operator!(add, add_, mul,
     {"+", BinaryOperation::Add},
     {"-", BinaryOperation::Sub}
 );
 
-left_accocitive_binary_infix_operator!(mul, mul_, unary_minus,
+left_associtive_binary_infix_operator!(mul, mul_, unary_minus,
     {"*", BinaryOperation::Mul},
     {"//", BinaryOperation::Div}
 );
@@ -397,15 +403,15 @@ fn unary_minus(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseEr
     }
 }
 
-left_accocitive_binary_infix_operator!(pow, pow_, index,
+left_associtive_binary_infix_operator!(pow, pow_, index,
     {"**", BinaryOperation::Pow}
 );
 
-left_accocitive_binary_infix_operator!(index, index_, range,
+left_associtive_binary_infix_operator!(index, index_, range,
     {"!!", BinaryOperation::Index}
 );
 
-left_accocitive_binary_infix_operator!(range, _range, call,
+left_associtive_binary_infix_operator!(range, _range, call,
     {"..", BinaryOperation::Range},
     {"..=", BinaryOperation::RangeInclusive}
 );

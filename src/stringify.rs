@@ -98,6 +98,7 @@ impl BinaryOperation {
             BinaryOperation::Pipe => "|".to_string(),
             BinaryOperation::WriteFile => ">>".to_string(),
             BinaryOperation::EnvAssign => "$=".to_string(),
+            BinaryOperation::SemiColon => ";".to_string(),
             BinaryOperation::Custon(s) => s.clone(),
         }
     }

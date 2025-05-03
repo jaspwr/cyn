@@ -536,6 +536,12 @@ pub fn eval(
 
                     panic!();
                 }
+                crate::grammar::BinaryOperation::SemiColon => {
+                    let _ = eval(*a, state, ctx.clone())?;
+                    let _ = eval(*b, state, ctx.clone())?;
+
+                    Value::Void
+                }
             }
         }
         Node::UnaryOperation(oper, a) => match oper {

@@ -10,7 +10,7 @@ use rustyline::highlight::{CmdKind, Highlighter, MatchingBracketHighlighter};
 use rustyline::hint::HistoryHinter;
 use rustyline::validate::MatchingBracketValidator;
 use rustyline::{Completer, Helper, Hinter, Validator};
-use rustyline::{CompletionType, Config, EditMode, Editor};
+use rustyline::{CompletionType, Config, Editor};
 
 use crate::interpreter::{self, ExecutionContext};
 use crate::utils::eval_string;
