@@ -22,7 +22,25 @@ bleh = if h == 7
 # main = runOn (λa -> $a * 2) 16
 
 
-main = map $double [1, 2, 3, 4]
+main =
+	println $h;
+	println "aaa";
+	println "b";
+
+	blehs := 3;
+
+	while $blehs < 20 do {
+		blehs += 1;
+		println $blehs
+	};
+
+    if $h == 16
+		then println "h is 8"
+		else println "h is not 8";
+
+
+	println "c"
+
 
 # main = double 8
 

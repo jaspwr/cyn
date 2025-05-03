@@ -1,10 +1,4 @@
-use std::{
-    collections::HashMap,
-    env,
-    io::Write,
-    path::PathBuf,
-    process::Command,
-};
+use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
 
 use crate::{
     builtins::try_builtin,
@@ -405,68 +399,68 @@ pub fn eval(
             };
 
             match oper {
-                crate::grammar::BinaryOperation::Add => {
+                grammar::BinaryOperation::Add => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a + b)
                 }
-                crate::grammar::BinaryOperation::Sub => {
+                grammar::BinaryOperation::Sub => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a - b)
                 }
-                crate::grammar::BinaryOperation::Mul => {
+                grammar::BinaryOperation::Mul => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a * b)
                 }
-                crate::grammar::BinaryOperation::Div => {
+                grammar::BinaryOperation::Div => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a / b)
                 }
-                crate::grammar::BinaryOperation::Pow => {
+                grammar::BinaryOperation::Pow => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Double(a.powf(b))
                 }
-                crate::grammar::BinaryOperation::Eq => {
+                grammar::BinaryOperation::Eq => {
                     // TODO: try checking types first
                     let a = eval(*a, state, ctx.clone())?.as_string()?;
                     let b = eval(*b, state, ctx.clone())?.as_string()?;
                     Value::Bool(a == b)
                 }
-                crate::grammar::BinaryOperation::Lt => {
+                grammar::BinaryOperation::Lt => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Bool(a < b)
                 }
-                crate::grammar::BinaryOperation::Gt => {
+                grammar::BinaryOperation::Gt => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Bool(a > b)
                 }
-                crate::grammar::BinaryOperation::Lte => {
+                grammar::BinaryOperation::Lte => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Bool(a <= b)
                 }
-                crate::grammar::BinaryOperation::Gte => {
+                grammar::BinaryOperation::Gte => {
                     let a = eval(*a, state, ctx.clone())?.as_double()?;
                     let b = eval(*b, state, ctx.clone())?.as_double()?;
                     Value::Bool(a >= b)
                 }
-                crate::grammar::BinaryOperation::And => {
+                grammar::BinaryOperation::And => {
                     let a = eval(*a, state, ctx.clone())?.as_bool()?;
                     let b = eval(*b, state, ctx.clone())?.as_bool()?;
                     Value::Bool(a && b)
                 }
-                crate::grammar::BinaryOperation::Or => {
+                grammar::BinaryOperation::Or => {
                     let a = eval(*a, state, ctx.clone())?.as_bool()?;
                     let b = eval(*b, state, ctx.clone())?.as_bool()?;
                     Value::Bool(a || b)
                 }
-                crate::grammar::BinaryOperation::Index => {
+                grammar::BinaryOperation::Index => {
                     let a = eval(*a, state, ctx.clone())?.as_array()?;
                     let b = eval(*b, state, ctx.clone())?.as_int()?;
 
@@ -482,18 +476,18 @@ pub fn eval(
                         panic!();
                     }
                 }
-                crate::grammar::BinaryOperation::Custon(_) => todo!(),
-                crate::grammar::BinaryOperation::Range => {
+                grammar::BinaryOperation::Custon(_) => todo!(),
+                grammar::BinaryOperation::Range => {
                     let a = eval(*a, state, ctx.clone())?.as_int()?;
                     let b = eval(*b, state, ctx.clone())?.as_int()?;
                     range(state, a, b, ctx.clone())?
                 }
-                crate::grammar::BinaryOperation::RangeInclusive => {
+                grammar::BinaryOperation::RangeInclusive => {
                     let a = eval(*a, state, ctx.clone())?.as_int()?;
                     let b = eval(*b, state, ctx.clone())?.as_int()? + 1;
                     range(state, a, b, ctx.clone())?
                 }
-                crate::grammar::BinaryOperation::WriteFile => {
+                grammar::BinaryOperation::WriteFile => {
                     let data = eval(*a, state, ctx.clone())?.as_string()?;
                     let path = eval(*b, state, ctx.clone())?.as_string()?;
 
@@ -503,7 +497,7 @@ pub fn eval(
 
                     Value::Void
                 }
-                crate::grammar::BinaryOperation::Pipe => {
+                grammar::BinaryOperation::Pipe => {
                     let data = eval(*a, state, ctx.clone())?.as_string()?;
                     eval(
                         *b,
@@ -514,7 +508,7 @@ pub fn eval(
                         },
                     )?
                 }
-                crate::grammar::BinaryOperation::EnvAssign => {
+                grammar::BinaryOperation::EnvAssign => {
                     let var = as_identifier_even_if_function_call(*a)?;
 
                     let data = eval(*b, state, ctx.clone())?.as_string()?;
@@ -523,7 +517,7 @@ pub fn eval(
 
                     Value::Void
                 }
-                crate::grammar::BinaryOperation::Concat => {
+                grammar::BinaryOperation::Concat => {
                     let a = eval(*a, state, ctx.clone())?.as_array()?;
                     let b = eval(*b, state, ctx.clone())?.as_array()?;
 
@@ -536,16 +530,57 @@ pub fn eval(
 
                     panic!();
                 }
-                crate::grammar::BinaryOperation::SemiColon => {
+                grammar::BinaryOperation::SemiColon => {
                     let _ = eval(*a, state, ctx.clone())?;
-                    let _ = eval(*b, state, ctx.clone())?;
+                    eval(*b, state, ctx.clone())?
+                }
+                grammar::BinaryOperation::Assign => {
+                    let name = as_identifier_even_if_function_call(*a)?;
 
-                    Value::Void
+                    if !state.constants.contains_key(&name) {
+                        return rte(format!("Undefined indentifer {}", name));
+                    }
+
+                    let value = eval(*b, state, ctx.clone())?;
+
+                    state.constants.insert(name, value.clone());
+
+                    return Ok(value);
+                }
+                grammar::BinaryOperation::Declare => {
+                    let name = as_identifier_even_if_function_call(*a)?;
+                    let value = eval(*b, state, ctx.clone())?;
+
+                    state.constants.insert(name, value.clone());
+
+                    return Ok(value);
+                }
+                grammar::BinaryOperation::AssignAnd(operation) => {
+                    let name = as_identifier_even_if_function_call(*a)?;
+                    let value = eval(*b, state, ctx.clone())?;
+
+                    let Some(old_value) = state.constants.get(&name).cloned() else {
+                        return rte(format!("Undefined identifier {}", name));
+                    };
+
+                    let v1 = Node::String(old_value.as_string()?);
+                    let v2 = Node::String(value.as_string()?);
+                    let node = Node::BinaryOperation(
+                        *operation,
+                        Box::new(v1),
+                        Box::new(v2),
+                    );
+
+                    let new_val = eval(node, state, ctx.clone())?;
+
+                    state.constants.insert(name, new_val.clone());
+
+                    return Ok(new_val);
                 }
             }
         }
         Node::UnaryOperation(oper, a) => match oper {
-            crate::grammar::UnaryOperation::Negate => {
+            grammar::UnaryOperation::Negate => {
                 let a = eval(*a, state, ctx.clone())?.as_double()?;
                 Value::Double(-a)
             }
@@ -659,6 +694,15 @@ pub fn eval(
             }
 
             load_module(path_pathbuf, qualified, state)?
+        }
+        Node::While { condition, body } => {
+            let mut values = Vec::with_capacity(10);
+
+            while eval(*condition.clone(), state, ctx.clone())?.as_bool()? {
+                values.push(eval(*body.clone(), state, ctx.clone())?);
+            }
+
+            Value::Array(values)
         }
     })
 }

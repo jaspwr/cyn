@@ -27,6 +27,10 @@ pub enum Node {
         then_branch: Box<Node>,
         else_branch: Box<Node>,
     },
+    While {
+        condition: Box<Node>,
+        body: Box<Node>,
+    },
     ArrayLiteral(Vec<Node>),
     Import {
         qualified: bool,
@@ -61,6 +65,9 @@ pub enum BinaryOperation {
     Gte,
     And,
     Or,
+    Assign,
+    AssignAnd(Box<BinaryOperation>),
+    Declare,
     Index,
     Concat,
     Range,
@@ -171,7 +178,7 @@ struct ParsingContext {
 fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     let mut nodes = vec![];
 
-    while let Ok((new_ts, node)) = semicolon(ts.clone(), ctx) {
+    while let Ok((new_ts, node)) = import(ts.clone(), ctx) {
         ts = new_ts;
 
         while ts
@@ -196,10 +203,6 @@ fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast),
 
     return Ok((ts, Node::DefinitionList(nodes)));
 }
-
-left_associtive_binary_infix_operator!(semicolon, semicolon_, import,
-    {";", BinaryOperation::SemiColon}
-);
 
 fn import(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "use") {
@@ -254,7 +257,7 @@ fn assignment(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErr
         }
 
         if peek_and_compare(&ts, "=") {
-            let (mut ts, rhs) = lambda(ts[1..].to_vec(), ctx)?;
+            let (mut ts, rhs) = semicolon(ts[1..].to_vec(), ctx)?;
             let body = Box::new(rhs);
             let mut where_definitions = None;
 
@@ -276,8 +279,13 @@ fn assignment(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErr
         }
     }
 
-    return lambda(ts, ctx);
+    return semicolon(ts, ctx);
 }
+
+
+right_associtive_binary_infix_operator!(semicolon, semicolon_, lambda,
+    {";", BinaryOperation::SemiColon}
+);
 
 fn lambda(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     if peek_and_compare(&ts, "λ") {
@@ -350,6 +358,38 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
             },
         ));
     } else {
+        while_(ts, ctx)
+    }
+}
+
+fn while_(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+    if peek_and_compare(&ts, "while") {
+        ts = ts[1..].to_vec();
+
+        let (mut ts, condition) = lambda(ts.clone(), ctx)?;
+
+        if !peek_and_compare(&ts, "do") {
+            return Err(ParseError {
+                message: "Expected `do`".to_string(),
+                range: ts[0].range,
+            });
+        }
+        ts = ts[1..].to_vec();
+
+        let (mut ts, body) = lambda(ts.clone(), ctx)?;
+
+        while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
+            ts = ts[1..].to_vec();
+        }
+
+        return Ok((
+            ts,
+            Node::While {
+                condition: Box::new(condition),
+                body: Box::new(body),
+            },
+        ));
+    } else {
         file(ts, ctx)
     }
 }
@@ -357,7 +397,17 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
 
 left_associtive_binary_infix_operator!(file, file_, pipe,
     {">>", BinaryOperation::WriteFile},
-    {"$=", BinaryOperation::EnvAssign}
+    {"$=", BinaryOperation::EnvAssign},
+    {"=", BinaryOperation::Assign},
+    {":=", BinaryOperation::Declare},
+    {"+=", BinaryOperation::AssignAnd(Box::new(BinaryOperation::Add))},
+    {"-=", BinaryOperation::AssignAnd(Box::new(BinaryOperation::Sub))},
+    {"*=", BinaryOperation::AssignAnd(Box::new(BinaryOperation::Mul))},
+    {"//=", BinaryOperation::AssignAnd(Box::new(BinaryOperation::Div))},
+    {"&&=", BinaryOperation::AssignAnd(Box::new(BinaryOperation::And))},
+    {"||=", BinaryOperation::AssignAnd(Box::new(BinaryOperation::Or))},
+    {"++=", BinaryOperation::AssignAnd(Box::new(BinaryOperation::Concat))},
+    {"**=", BinaryOperation::AssignAnd(Box::new(BinaryOperation::Pow))}
 );
 
 left_associtive_binary_infix_operator!(pipe, pipe_, bool_ops,
@@ -510,6 +560,37 @@ fn array(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErro
             Err(uncolosed_error)
         }
     } else {
+        scope(ts, ctx)
+    }
+}
+
+fn scope(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+    if peek_and_compare(&ts, "{") {
+        let uncolosed_error = ParseError {
+            message: "Expected `}`".to_string(),
+            range: ts[0].range,
+        };
+
+        ts = ts[1..].to_vec();
+
+        let (ts, body) = semicolon(
+            ts.clone(),
+            ParsingContext {
+                parsing_args: false,
+                ..ctx.clone()
+            },
+        )?;
+
+        let Some(next) = ts.iter().next() else {
+            return Err(uncolosed_error);
+        };
+
+        if next.token == "}" {
+            Ok((ts[1..].to_vec(), body))
+        } else {
+            Err(uncolosed_error)
+        }
+    } else {
         literal(ts, ctx)
     }
 }
@@ -525,6 +606,11 @@ fn literal(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError>
     }
 
     if let Some(token) = peek(&ts) {
+        if token.token == "true" || token.token == "false" {
+            let node = Node::String(token.token.to_string());
+            return Ok((ts[1..].to_vec(), node));
+        }
+
         if token.kind == TokenKind::Word || token.kind == TokenKind::QuotedString {
             let mut node = Node::String(token.token.to_string());
 

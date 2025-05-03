@@ -72,6 +72,13 @@ impl Node {
                 if *qualified { " unqualified" } else { "" },
                 path.stringify()
             ),
+            Node::While { condition, body } =>  {
+                format!(
+                    "while {} do {}",
+                    condition.stringify(),
+                    body.stringify()
+                )
+            }
         }
     }
 }
@@ -100,6 +107,11 @@ impl BinaryOperation {
             BinaryOperation::EnvAssign => "$=".to_string(),
             BinaryOperation::SemiColon => ";".to_string(),
             BinaryOperation::Custon(s) => s.clone(),
+            BinaryOperation::Assign => "=".to_string(),
+            BinaryOperation::Declare => ":=".to_string(),
+            BinaryOperation::AssignAnd(binary_operation) => {
+                format!("{}{}", binary_operation.stringify(), "=")
+            }
         }
     }
 }

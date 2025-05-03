@@ -3,6 +3,7 @@ pub struct Token<'src> {
     pub token: &'src str,
     pub range: (usize, usize),
     pub kind: TokenKind,
+    pub indentation: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +57,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
     let mut in_comment = false;
 
-    let mut append = |i: usize, last_category: CharCategory| {
+    let mut append = |i: usize, last_category: CharCategory, indentation: i32| {
         if last_category == CharCategory::StringLiteral {
             token_start += 1;
         }
@@ -65,7 +66,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
         let kind = match last_category {
             CharCategory::AlphaNum => Some(TokenKind::Word),
-            CharCategory::StringLiteral => Some(TokenKind::QuotedString), 
+            CharCategory::StringLiteral => Some(TokenKind::QuotedString),
             CharCategory::Operator => Some(TokenKind::Operator),
             CharCategory::Bracket => Some(TokenKind::Bracket),
             CharCategory::Whitespace => None,
@@ -82,7 +83,8 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
         if let Some(mut kind) = kind {
             match token {
-                "where" | "if" | "then" | "else" | "use" | "unqualified" => kind = TokenKind::Keyword,
+                "where" | "if" | "then" | "else" | "use" | "unqualified" | "let" | "while"
+                | "do" | "true" | "false" => kind = TokenKind::Keyword,
                 "-" => kind = TokenKind::Operator, // minus is allowed in identifiers; convert back
                 // if alone
                 _ => {}
@@ -92,6 +94,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
                 token,
                 range: (token_start, i),
                 kind,
+                indentation: indentation as usize,
             });
         }
 
@@ -111,14 +114,14 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         }
 
         if in_comment {
-            append(i, last_category);
+            append(i, last_category, indentation);
             last_category = CharCategory::None;
             continue;
         }
 
         if c == '#' {
             in_comment = true;
-            append(i, last_category);
+            append(i, last_category, indentation);
             last_category = CharCategory::None;
             continue;
         }
@@ -129,7 +132,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             }
 
             in_string_literal = !in_string_literal;
-            append(i, last_category);
+            append(i, last_category, indentation);
             last_category = CharCategory::None;
             continue;
         }
@@ -150,9 +153,9 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             } else {
                 counting_indentation = false;
 
-                if indentation < last_indentation || indentation == 0 {
+                if indentation == 0 {
                     last_category = CharCategory::EndExpression;
-                    append(i, last_category);
+                    append(i, last_category, indentation);
                 }
 
                 last_indentation = indentation;
@@ -185,21 +188,20 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         {
             category = CharCategory::Operator;
         }
-        if c == '.' && last_category == CharCategory::Operator
-        {
+        if c == '.' && last_category == CharCategory::Operator {
             category = CharCategory::Operator;
         }
 
         // Allow prime in identifiers. E.g. `x'` or `x''`
-        if c == '\'' && last_category == CharCategory::AlphaNum
-        {
+        if c == '\'' && last_category == CharCategory::AlphaNum {
             category = CharCategory::AlphaNum;
         }
-        
+
         // Variables
         if c == '$'
             && source.len() > i + 1
-            && categorize_char(source[i + 1..].chars().next().unwrap()) == CharCategory::AlphaNum {
+            && categorize_char(source[i + 1..].chars().next().unwrap()) == CharCategory::AlphaNum
+        {
             category = CharCategory::AlphaNum;
         }
 
@@ -207,11 +209,11 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             continue;
         }
 
-        append(i, last_category);
+        append(i, last_category, indentation);
         last_category = category;
     }
 
-    append(source.len(), last_category);
+    append(source.len(), last_category, indentation);
 
     tokens
 }
