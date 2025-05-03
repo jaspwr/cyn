@@ -5,7 +5,13 @@ use crate::{
     utils::parse_args,
 };
 
-pub fn len(value: Value) -> Result<Value, RuntimeError> {
+pub fn len(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return rte("Usage: lines <string>");
+    }
+
+    let value = args[0].clone();
+
     Ok(match value {
         Value::Array(arr) => Value::Double(arr.len() as f64),
         _ => {
@@ -45,7 +51,13 @@ pub fn readline(_values: Vec<Value>) -> Result<Value, RuntimeError> {
     Ok(Value::String(buffer.trim().to_string()))
 }
 
-pub fn lines(value: Value) -> Result<Value, RuntimeError> {
+pub fn lines(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return rte("Usage: lines <string>");
+    }
+
+    let value = args[0].clone();
+
     if let Value::String(s) = value {
         let lines = s
             .split('\n')
@@ -183,10 +195,15 @@ fn rm(args: Vec<Value>) -> Result<Value, RuntimeError> {
         }
     }
 
-    println!("Removing {}. Are you sure? (y/n)", args.files.join(" "));
-    if readline(vec![])?.as_string()? != "y" {
-        println!("Aborting");
-        return Ok(Value::Void);
+    let confirm = !args.long_flags.contains("no-confirm")
+        && !args.short_flags.contains("n");
+
+    if confirm {
+        println!("Removing {}. Are you sure? (y/n)", args.files.join(" "));
+        if readline(vec![])?.as_string()? != "y" {
+            println!("Aborting");
+            return Ok(Value::Void);
+        }
     }
 
     for path in args.files {
@@ -261,11 +278,11 @@ pub fn try_builtin(
     state: &mut RuntimeState,
 ) -> Option<Result<Value, RuntimeError>> {
     Some(match name {
-        "len" => len(args[0].clone()),
+        "len" => len(args),
         "print" => print(args),
         "println" => println(args),
         "readline" => readline(args),
-        "lines" => lines(args[0].clone()),
+        "lines" => lines(args),
         "pwd" => pwd(),
         "cd" => cd(args, state),
         "assert" => assert(args),
