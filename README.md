@@ -4,6 +4,13 @@ Shell language with haskell-ish syntax.
 </center>
 
 ```
+  ....  .... ... .. ...
+.|   ''  '|.  |   ||  ||
+||        '|.|    ||  ||
+ '|...'    '|    .||. ||.
+        .. |
+         ''
+-------- v0.1.0 --------
 C:\Users\jaspe\dev\cyn >> add a b = $a + $b
 C:\Users\jaspe\dev\cyn >> add 1
 λb -> ($a + $b)
