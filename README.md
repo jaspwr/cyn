@@ -3,7 +3,7 @@
 Shell language with haskell-ish syntax.
 </center>
 
-```hs
+```
 C:\Users\jaspe\dev\cyn >> add a b = $a + $b
 C:\Users\jaspe\dev\cyn >> add 1
 λb -> ($a + $b)
