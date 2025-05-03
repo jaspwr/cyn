@@ -30,8 +30,7 @@ main =
 
 	while $blehs < 20 do {
 		blehs *= 2;
-		println $blehs;
-		break
+		println $blehs
 	};
 
     if $h == 16

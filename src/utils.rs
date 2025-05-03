@@ -10,7 +10,7 @@ pub fn eval_string(source: &str, state: &mut ExecutionState, ctx: ExecutionConte
     let tokens = tokenizer::tokenize(source);
     // println!("tokens: {:#?}", tokens);
 
-    match grammar::parse(tokens) {
+    match grammar::parse(&tokens) {
         Ok(ast) => {
             // println!("ast: {:#?}", ast);
             interpreter::eval(ast, state, ctx)

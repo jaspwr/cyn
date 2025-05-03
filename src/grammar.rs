@@ -1,6 +1,6 @@
 use crate::tokenizer::{Token, TokenKind};
 
-type Tokens<'source> = Vec<Token<'source>>;
+type Tokens<'source, 'tokens> = &'tokens [Token<'source>];
 type Ast = Node;
 
 #[derive(Debug, Clone)]
@@ -96,16 +96,16 @@ pub struct ParseError {
 
 macro_rules! left_associtive_binary_infix_operator {
     ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
-        fn $name(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+        fn $name<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
             let (ts, lhs) = $next(ts, ctx)?;
 
             $alt(lhs, ts, ctx)
         }
 
-        fn $alt(lhs: Ast, ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+        fn $alt<'t, 's>(lhs: Ast, ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
             $(
                 if peek_and_compare(&ts, $comp) {
-                    let (ts, rhs) = $next(ts[1..].to_vec(), ctx)?;
+                    let (ts, rhs) = $next(&ts[1..], ctx)?;
 
                     let this_oper_res =
                         Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
@@ -125,7 +125,7 @@ macro_rules! left_associtive_binary_infix_operator {
 
 macro_rules! right_associtive_binary_infix_operator {
     ($name:ident, $alt:ident, $next:ident, $({$comp:expr, $oper:expr}),+) => {
-        fn $name(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+        fn $name<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
             let (ts, lhs) = $next(ts, ctx)?;
 
             let mut expr = (ts, lhs);
@@ -137,10 +137,10 @@ macro_rules! right_associtive_binary_infix_operator {
             Ok(expr)
         }
 
-        fn $alt(lhs: Ast, ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+        fn $alt<'t, 's>(lhs: Ast, ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
             $(
                 if peek_and_compare(&ts, $comp) {
-                    let (ts, rhs) = $next(ts[1..].to_vec(), ctx)?;
+                    let (ts, rhs) = $next(&ts[1..], ctx)?;
 
                     let this_oper_res =
                         Node::BinaryOperation($oper, Box::new(lhs), Box::new(rhs));
@@ -165,7 +165,7 @@ macro_rules! expect_exact_token {
                 range: if $ts.is_empty() { (0, 0) } else { $ts[0].range },
             });
         }
-        $ts = $ts[1..].to_vec();
+        $ts = &$ts[1..];
     };
 }
 
@@ -196,7 +196,10 @@ struct ParsingContext {
     parsing_args: bool,
 }
 
-fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn definition_list<'t, 's>(
+    mut ts: Tokens<'s, 't>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'s, 't>, Ast), ParseError> {
     let mut nodes = vec![];
 
     loop {
@@ -219,7 +222,7 @@ fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast),
             .map(|t| t.kind == TokenKind::ExpressionTerminator)
             .unwrap_or(false)
         {
-            ts = ts[1..].to_vec();
+            ts = &ts[1..];
         }
 
         nodes.push(node);
@@ -236,14 +239,17 @@ fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast),
     return Ok((ts, Node::DefinitionList(nodes)));
 }
 
-fn import(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn import<'s, 't>(
+    ts: Tokens<'s, 't>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'s, 't>, Ast), ParseError> {
     if peek_and_compare(&ts, "use") {
-        let mut ts = ts[1..].to_vec();
+        let mut ts = &ts[1..];
 
         let mut qualified = true;
 
-        if peek_and_compare(&ts, "unqualified") {
-            ts = ts[1..].to_vec();
+        if peek_and_compare(ts, "unqualified") {
+            ts = &ts[1..];
             qualified = false;
         }
 
@@ -267,7 +273,10 @@ fn import(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> 
     assignment(ts, ctx)
 }
 
-fn assignment(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn assignment<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if let Ok((mut ts, name)) = literal(
         ts.clone(),
         ParsingContext {
@@ -289,12 +298,12 @@ fn assignment(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErr
         }
 
         if peek_and_compare(&ts, "=") {
-            let (mut ts, rhs) = semicolon(ts[1..].to_vec(), ctx)?;
+            let (mut ts, rhs) = semicolon(&ts[1..], ctx)?;
             let body = Box::new(rhs);
             let mut where_definitions = None;
 
             if peek_and_compare(&ts, "where") {
-                let (new_ts, rhs) = definition_list(ts[1..].to_vec(), ctx)?;
+                let (new_ts, rhs) = definition_list(&ts[1..], ctx)?;
                 ts = new_ts;
                 where_definitions = Some(Box::new(rhs));
             }
@@ -318,9 +327,9 @@ right_associtive_binary_infix_operator!(semicolon, semicolon_, lambda,
     {";", BinaryOperation::SemiColon}
 );
 
-fn lambda(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn lambda<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "λ") {
-        let mut ts = ts[1..].to_vec();
+        let mut ts = &ts[1..];
 
         let mut args = vec![];
 
@@ -336,7 +345,7 @@ fn lambda(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> 
         }
 
         if peek_and_compare(&ts, "->") {
-            let (ts, rhs) = lambda(ts[1..].to_vec(), ctx)?;
+            let (ts, rhs) = lambda(&ts[1..], ctx)?;
             return Ok((
                 ts,
                 Node::Lambda {
@@ -350,31 +359,31 @@ fn lambda(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> 
     control_flow_statements(ts, ctx)
 }
 
-fn control_flow_statements(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn control_flow_statements<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "return") {
-        let (ts, value) = lambda(ts[1..].to_vec(), ctx)?;
+        let (ts, value) = lambda(&ts[1..], ctx)?;
         return Ok((ts, Node::Return(Box::new(value))));
     }
 
     if peek_and_compare(&ts, "defer") {
-        let (ts, value) = lambda(ts[1..].to_vec(), ctx)?;
+        let (ts, value) = lambda(&ts[1..], ctx)?;
         return Ok((ts, Node::Defer(Box::new(value))));
     }
 
     if peek_and_compare(&ts, "continue") {
-        return Ok((ts[1..].to_vec(), Node::Continue));
+        return Ok((&ts[1..], Node::Continue));
     }
 
     if peek_and_compare(&ts, "break") {
-        return Ok((ts[1..].to_vec(), Node::Break));
+        return Ok((&ts[1..], Node::Break));
     }
 
     if_then_else(ts, ctx)
 }
 
-fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn if_then_else<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "if") {
-        ts = ts[1..].to_vec();
+        ts = &ts[1..];
 
         let (mut ts, condition) = lambda(ts.clone(), ctx)?;
 
@@ -387,7 +396,7 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
         let (mut ts, else_branch) = lambda(ts.clone(), ctx)?;
 
         while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
-            ts = ts[1..].to_vec();
+            ts = &ts[1..];
         }
 
         return Ok((
@@ -403,9 +412,9 @@ fn if_then_else(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pa
     }
 }
 
-fn while_loop(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn while_loop<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "while") {
-        ts = ts[1..].to_vec();
+        ts = &ts[1..];
 
         let (mut ts, condition) = lambda(ts.clone(), ctx)?;
 
@@ -414,7 +423,7 @@ fn while_loop(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pars
         let (mut ts, body) = lambda(ts.clone(), ctx)?;
 
         while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
-            ts = ts[1..].to_vec();
+            ts = &ts[1..];
         }
 
         return Ok((
@@ -429,9 +438,9 @@ fn while_loop(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), Pars
     }
 }
 
-fn for_loop(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn for_loop<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "for") {
-        ts = ts[1..].to_vec();
+        ts = &ts[1..];
 
         let (mut ts, var) = brackets(ts.clone(), ctx)?;
 
@@ -444,7 +453,7 @@ fn for_loop(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseE
         let (mut ts, body) = lambda(ts.clone(), ctx)?;
 
         while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
-            ts = ts[1..].to_vec();
+            ts = &ts[1..];
         }
 
         return Ok((
@@ -506,9 +515,9 @@ left_associtive_binary_infix_operator!(mul, mul_, unary_minus,
     {"//", BinaryOperation::Div}
 );
 
-fn unary_minus(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn unary_minus<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "-") {
-        let (ts, n) = pow(ts[1..].to_vec(), ctx)?;
+        let (ts, n) = pow(&ts[1..], ctx)?;
         Ok((
             ts,
             Node::UnaryOperation(UnaryOperation::Negate, Box::new(n)),
@@ -531,7 +540,7 @@ left_associtive_binary_infix_operator!(range, _range, call,
     {"..=", BinaryOperation::RangeInclusive}
 );
 
-fn call(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn call<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     let Ok((ts, first)) = brackets(ts.clone(), ctx) else {
         return brackets(ts, ctx);
     };
@@ -557,7 +566,7 @@ fn call(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     Ok((ts, first))
 }
 
-fn brackets(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn brackets<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "(") {
         let uncolosed_error = ParseError {
             message: "Expected `)`".to_string(),
@@ -565,7 +574,7 @@ fn brackets(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError
         };
 
         let (ts, n) = lambda(
-            ts[1..].to_vec(),
+            &ts[1..],
             ParsingContext {
                 parsing_args: false,
                 ..ctx.clone()
@@ -577,7 +586,7 @@ fn brackets(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError
         };
 
         if next.token == ")" {
-            Ok((ts[1..].to_vec(), n))
+            Ok((&ts[1..], n))
         } else {
             Err(uncolosed_error)
         }
@@ -586,14 +595,14 @@ fn brackets(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError
     }
 }
 
-fn array(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn array<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "[") {
         let uncolosed_error = ParseError {
             message: "Expected `]`".to_string(),
             range: ts[0].range,
         };
 
-        ts = ts[1..].to_vec();
+        ts = &ts[1..];
 
         let mut items = vec![];
 
@@ -609,7 +618,7 @@ fn array(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErro
             items.push(item);
 
             if peek_and_compare(&ts, ",") {
-                ts = ts[1..].to_vec();
+                ts = &ts[1..];
             } else {
                 break;
             }
@@ -620,7 +629,7 @@ fn array(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErro
         };
 
         if next.token == "]" {
-            Ok((ts[1..].to_vec(), Node::ArrayLiteral(items)))
+            Ok((&ts[1..], Node::ArrayLiteral(items)))
         } else {
             Err(uncolosed_error)
         }
@@ -629,14 +638,17 @@ fn array(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErro
     }
 }
 
-fn scope(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn scope<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "{") {
         let uncolosed_error = ParseError {
             message: "Expected `}`".to_string(),
             range: ts[0].range,
         };
 
-        ts = ts[1..].to_vec();
+        ts = &ts[1..];
 
         let (ts, body) = semicolon(
             ts.clone(),
@@ -651,7 +663,7 @@ fn scope(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErro
         };
 
         if next.token == "}" {
-            Ok((ts[1..].to_vec(), body))
+            Ok((&ts[1..], body))
         } else {
             Err(uncolosed_error)
         }
@@ -660,7 +672,10 @@ fn scope(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErro
     }
 }
 
-fn literal(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+fn literal<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     let eof_err = Err(ParseError {
         message: "Unexpected end of input".to_string(),
         range: (0, 0),
@@ -673,7 +688,7 @@ fn literal(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError>
     if let Some(token) = peek(&ts) {
         if token.token == "true" || token.token == "false" {
             let node = Node::String(token.token.to_string());
-            return Ok((ts[1..].to_vec(), node));
+            return Ok((&ts[1..], node));
         }
 
         if token.kind == TokenKind::Word || token.kind == TokenKind::QuotedString {
@@ -711,18 +726,18 @@ fn literal(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError>
                 }
             }
 
-            return Ok((ts[1..].to_vec(), node));
+            return Ok((&ts[1..], node));
         }
     }
 
     return eof_err;
 }
 
-fn peek<'source>(ts: &'source Tokens) -> Option<&'source Token<'source>> {
+fn peek<'s, 't>(ts: Tokens<'s, 't>) -> Option<&'t Token<'s>> {
     ts.iter().next()
 }
 
-fn peek_and_compare<'source>(ts: &'source Tokens, token: &str) -> bool {
+fn peek_and_compare(ts: Tokens, token: &str) -> bool {
     peek(ts)
         .map(|t| {
             // println!("{} == {}", t.token, token);
@@ -731,7 +746,7 @@ fn peek_and_compare<'source>(ts: &'source Tokens, token: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn peek_and_compare_kind<'source>(ts: &'source Tokens, kind: TokenKind) -> bool {
+fn peek_and_compare_kind(ts: Tokens, kind: TokenKind) -> bool {
     peek(ts)
         .map(|t| {
             // println!("{} == {}", t.token, token);

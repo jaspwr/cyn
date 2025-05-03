@@ -752,7 +752,7 @@ pub fn load_module(
         ctx.function_prefix = Some(module);
     }
 
-    match grammar::parse(tokens) {
+    match grammar::parse(&tokens) {
         Ok(ast) => eval(ast, state, ctx),
         Err(e) => {
             return Err(RuntimeError {

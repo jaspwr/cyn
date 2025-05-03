@@ -40,7 +40,7 @@ fn main() {
 
         println!("tokens: {:#?}", tokens);
 
-        let ast = grammar::parse(tokens);
+        let ast = grammar::parse(&tokens);
 
         println!("ast: {:#?}", ast);
 
