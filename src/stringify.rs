@@ -72,12 +72,8 @@ impl Node {
                 if *qualified { " unqualified" } else { "" },
                 path.stringify()
             ),
-            Node::While { condition, body } =>  {
-                format!(
-                    "(while {} do {})",
-                    condition.stringify(),
-                    body.stringify()
-                )
+            Node::While { condition, body } => {
+                format!("(while {} do {})", condition.stringify(), body.stringify())
             }
             Node::For { var, range, body } => {
                 format!(
@@ -87,6 +83,10 @@ impl Node {
                     body.stringify()
                 )
             }
+            Node::Return(node) => "return ".to_string() + &node.stringify(),
+            Node::Break => "break".to_string(),
+            Node::Continue => "continue".to_string(),
+            Node::Defer(node) => "defer ".to_string() + &node.stringify(),
         }
     }
 }

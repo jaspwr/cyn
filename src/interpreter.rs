@@ -722,6 +722,10 @@ pub fn eval(
 
             Value::Array(values)
         }
+        Node::Return(node) => todo!(),
+        Node::Break => todo!(),
+        Node::Continue => todo!(),
+        Node::Defer(node) => todo!(),
     })
 }
 

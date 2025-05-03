@@ -83,8 +83,10 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
         if let Some(mut kind) = kind {
             match token {
-                "where" | "if" | "then" | "else" | "use" | "unqualified" | "let" | "while"
-                | "do" | "true" | "false" | "for" | "in" => kind = TokenKind::Keyword,
+                "where" | "if" | "then" | "else" | "use" | "unqualified" | "while" | "do"
+                | "true" | "false" | "for" | "in" | "return" | "break" | "continue" | "defer" => {
+                    kind = TokenKind::Keyword
+                }
                 "-" => kind = TokenKind::Operator, // minus is allowed in identifiers; convert back
                 // if alone
                 _ => {}

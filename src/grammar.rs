@@ -41,6 +41,10 @@ pub enum Node {
         qualified: bool,
         path: Box<Node>,
     },
+    Return(Box<Node>),
+    Defer(Box<Node>),
+    Break,
+    Continue,
 }
 
 #[derive(Debug, Clone)]
@@ -158,7 +162,7 @@ macro_rules! expect_exact_token {
         if !peek_and_compare(&$ts, $token) {
             return Err(ParseError {
                 message: format!("Expected `{}`", $token),
-                range: $ts[0].range,
+                range: if $ts.is_empty() { (0, 0) } else { $ts[0].range },
             });
         }
         $ts = $ts[1..].to_vec();
@@ -195,7 +199,18 @@ struct ParsingContext {
 fn definition_list(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
     let mut nodes = vec![];
 
-    while let Ok((new_ts, node)) = import(ts.clone(), ctx) {
+    loop {
+        let (new_ts, node) = match import(ts.clone(), ctx) {
+            Ok((new_ts, node)) => (new_ts, node),
+            Err(e) => {
+                if e.message == "Unexpected end of input" {
+                    break;
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+
         ts = new_ts;
 
         while ts
@@ -299,7 +314,6 @@ fn assignment(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseErr
     return semicolon(ts, ctx);
 }
 
-
 right_associtive_binary_infix_operator!(semicolon, semicolon_, lambda,
     {";", BinaryOperation::SemiColon}
 );
@@ -331,6 +345,28 @@ fn lambda(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> 
                 },
             ));
         }
+    }
+
+    control_flow_statements(ts, ctx)
+}
+
+fn control_flow_statements(ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseError> {
+    if peek_and_compare(&ts, "return") {
+        let (ts, value) = lambda(ts[1..].to_vec(), ctx)?;
+        return Ok((ts, Node::Return(Box::new(value))));
+    }
+
+    if peek_and_compare(&ts, "defer") {
+        let (ts, value) = lambda(ts[1..].to_vec(), ctx)?;
+        return Ok((ts, Node::Defer(Box::new(value))));
+    }
+
+    if peek_and_compare(&ts, "continue") {
+        return Ok((ts[1..].to_vec(), Node::Continue));
+    }
+
+    if peek_and_compare(&ts, "break") {
+        return Ok((ts[1..].to_vec(), Node::Break));
     }
 
     if_then_else(ts, ctx)
@@ -423,7 +459,6 @@ fn for_loop(mut ts: Tokens, ctx: ParsingContext) -> Result<(Tokens, Ast), ParseE
         file(ts, ctx)
     }
 }
-
 
 left_associtive_binary_infix_operator!(file, file_, pipe,
     {">>", BinaryOperation::WriteFile},

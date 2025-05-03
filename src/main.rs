@@ -7,6 +7,7 @@ use utils::eval_string;
 
 pub mod tokenizer;
 pub mod grammar;
+pub mod types;
 pub mod interpreter;
 pub mod interactive;
 pub mod utils;
