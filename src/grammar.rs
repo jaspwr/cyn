@@ -41,6 +41,7 @@ pub enum Node {
         qualified: bool,
         path: Box<Node>,
     },
+    Scope(Box<Node>),
     Return(Box<Node>),
     Defer(Box<Node>),
     Break,

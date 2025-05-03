@@ -87,6 +87,7 @@ impl Node {
             Node::Break => "break".to_string(),
             Node::Continue => "continue".to_string(),
             Node::Defer(node) => "defer ".to_string() + &node.stringify(),
+            Node::Scope(node) => format!("{{ {} }}", node.stringify()),
         }
     }
 }

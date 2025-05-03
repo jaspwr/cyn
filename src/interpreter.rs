@@ -8,7 +8,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct ExecutionState {
-    pub constants: HashMap<String, Value>,
+    pub variables: HashMap<String, Value>,
     pub runtime_state: RuntimeState,
     functions: HashMap<String, Function>,
 }
@@ -76,10 +76,10 @@ impl Function {
             });
         }
 
-        let previous_constants = state.constants.clone();
+        let previous_constants = state.variables.clone();
 
         for (arg, value) in self.args.iter().zip(args.iter()) {
-            state.constants.insert(arg.clone(), value.clone());
+            state.variables.insert(arg.clone(), value.clone());
         }
 
         let mut ret = eval(*self.body.clone(), state, ctx.clone()).map_err(|e| {
@@ -88,7 +88,7 @@ impl Function {
             new_e
         })?;
 
-        state.constants = previous_constants;
+        state.variables = previous_constants;
 
         let leftover = args.into_iter().skip(self.args.len()).collect::<Vec<_>>();
 
@@ -114,13 +114,13 @@ fn eval_lambda(
         body,
     } = lambda
     {
-        let previous_constants = state.constants.clone();
+        let previous_constants = state.variables.clone();
 
         for (arg, value) in args_names.iter().zip(arg_values.into_iter()) {
-            state.constants.insert(arg.clone(), value.clone());
+            state.variables.insert(arg.clone(), value.clone());
         }
 
-        state.constants.extend(captured);
+        state.variables.extend(captured);
 
         let ret = eval(*body, state, ctx.clone()).map_err(|e| {
             let mut new_e = e.clone();
@@ -128,7 +128,7 @@ fn eval_lambda(
             new_e
         })?;
 
-        state.constants = previous_constants;
+        state.variables = previous_constants;
 
         return Ok(ret);
     } else {
@@ -203,7 +203,7 @@ impl ExecutionState {
     pub fn new() -> Self {
         Self {
             functions: HashMap::new(),
-            constants: HashMap::new(),
+            variables: HashMap::new(),
             runtime_state: RuntimeState::new(),
         }
     }
@@ -366,7 +366,7 @@ pub fn eval(
         Node::String(s) => Value::String(s),
         Node::Indentifier(s) => {
             // println!("constants: {:#?} ........ {}", state, s);
-            if let Some(value) = state.constants.get(&s) {
+            if let Some(value) = state.variables.get(&s) {
                 return Ok(value.clone());
             }
 
@@ -537,13 +537,13 @@ pub fn eval(
                 grammar::BinaryOperation::Assign => {
                     let name = as_identifier_even_if_function_call(*a)?;
 
-                    if !state.constants.contains_key(&name) {
+                    if !state.variables.contains_key(&name) {
                         return rte(format!("Undefined indentifer {}", name));
                     }
 
                     let value = eval(*b, state, ctx.clone())?;
 
-                    state.constants.insert(name, value.clone());
+                    state.variables.insert(name, value.clone());
 
                     return Ok(value);
                 }
@@ -551,7 +551,7 @@ pub fn eval(
                     let name = as_identifier_even_if_function_call(*a)?;
                     let value = eval(*b, state, ctx.clone())?;
 
-                    state.constants.insert(name, value.clone());
+                    state.variables.insert(name, value.clone());
 
                     return Ok(value);
                 }
@@ -559,7 +559,7 @@ pub fn eval(
                     let name = as_identifier_even_if_function_call(*a)?;
                     let value = eval(*b, state, ctx.clone())?;
 
-                    let Some(old_value) = state.constants.get(&name).cloned() else {
+                    let Some(old_value) = state.variables.get(&name).cloned() else {
                         return rte(format!("Undefined identifier {}", name));
                     };
 
@@ -573,7 +573,7 @@ pub fn eval(
 
                     let new_val = eval(node, state, ctx.clone())?;
 
-                    state.constants.insert(name, new_val.clone());
+                    state.variables.insert(name, new_val.clone());
 
                     return Ok(new_val);
                 }
@@ -611,7 +611,7 @@ pub fn eval(
                 return function.eval(args, state, ctx.clone());
             }
 
-            if let Some(value) = state.constants.get(&name) {
+            if let Some(value) = state.variables.get(&name) {
                 return eval_lambda(value.clone(), args, state, ctx.clone());
             }
 
@@ -665,7 +665,7 @@ pub fn eval(
             Value::Lambda {
                 args,
                 // TODO: only use values that are used in the body
-                captured: state.constants.clone(),
+                captured: state.variables.clone(),
                 body,
             }
         }
@@ -707,18 +707,18 @@ pub fn eval(
         Node::For { var, range, body } => {
             let mut values = Vec::with_capacity(10);
 
-            let previous_constants = state.constants.clone();
+            let previous_constants = state.variables.clone();
 
             let var = as_identifier_even_if_function_call(*var)?;
 
             if let Value::Array(arr) = eval(*range.clone(), state, ctx.clone())?.as_array()? {
                 for value in arr.into_iter() {
-                    state.constants.insert(var.clone(), value.clone());
+                    state.variables.insert(var.clone(), value.clone());
                     values.push(eval(*body.clone(), state, ctx.clone())?);
                 }
             }
 
-            state.constants = previous_constants;
+            state.variables = previous_constants;
 
             Value::Array(values)
         }
@@ -726,6 +726,12 @@ pub fn eval(
         Node::Break => todo!(),
         Node::Continue => todo!(),
         Node::Defer(node) => todo!(),
+        Node::Scope(node) => {
+            
+            let ret = eval(*node, state, ctx.clone())?;
+
+            ret
+        },
     })
 }
 

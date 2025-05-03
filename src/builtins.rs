@@ -166,7 +166,7 @@ fn cat(args: Vec<Value>) -> Result<Value, RuntimeError> {
     let args = parse_args(args)?;
 
     if args.files.len() != 1 {
-        return rte("Usage: mkdir <path>");
+        return rte("Usage: cat <path>");
     }
 
     let file = args.files[0].clone();
@@ -286,6 +286,15 @@ pub fn echo(args: Vec<Value>) -> Result<Value, RuntimeError> {
     )))
 }
 
+static STEAM_LOCOMOTIVE: &str = "Steam Locomotive:
+   _____                 . . . . . o o o o o
+  __|[_]|__ ___________ _______    ____      o
+ |[] [] []| [] [] [] [] [_____(__  ][]]_n_n__][.
+_|________|_[_________]_[________]_|__|________)<
+  oo    oo 'oo      oo ' oo    oo 'oo 0000---oo\\_
+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+";
+
 pub fn try_builtin(
     name: &str,
     args: Vec<Value>,
@@ -307,6 +316,7 @@ pub fn try_builtin(
         "touch" => touch(args),
         "rm" => rm(args),
         "echo" => echo(args),
+        "sl" => Ok(Value::String(STEAM_LOCOMOTIVE.to_string())),
         _ => return None,
     })
 }
