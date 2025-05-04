@@ -55,6 +55,6 @@ a b = <h1 style="asdfhkuj" a=(ls)>
 </h1>
 
 b = {
-    fucl: 2,
-    bleh: 3
+    fucl = 2,
+    bleh = 3
 }

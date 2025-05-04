@@ -678,7 +678,7 @@ fn scope<'t, 's>(
     ctx: ParsingContext,
 ) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "{") {
-        if ts.len() >= 3 && ts[2].token == ":" {
+        if ts.len() >= 3 && ts[2].token == "=" {
             return object_literal(ts, ctx);
         }
 
@@ -730,7 +730,7 @@ fn object_literal<'t, 's>(
         let name = ts[0].token.to_string();
         ts = &ts[1..];
 
-        expect_exact_token!(":", ts);
+        expect_exact_token!("=", ts);
 
         let (new_ts, value) = lambda(
             ts,
