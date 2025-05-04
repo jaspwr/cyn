@@ -92,6 +92,10 @@ pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
                     Err(e) => format!("[!] {:?}", e),
                 };
 
+                if message.trim().is_empty() {
+                    continue;
+                }
+
                 println!("{}", message);
             }
             Err(ReadlineError::Interrupted) => {
