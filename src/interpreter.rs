@@ -732,6 +732,8 @@ pub fn eval(
 
             ret
         },
+        Node::MarkupBlock { tag, attributes, body, siblings } => todo!(),
+        Node::ObjectLiteral(vec) => todo!(),
     })
 }
 

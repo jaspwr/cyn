@@ -108,6 +108,8 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
     let mut counting_indentation = true;
     let mut in_string_literal = false;
 
+    let mut last_char = '\0';
+
     for (i, c) in source.char_indices() {
         if c == '\n' || c == '\r' {
             indentation = 0;
@@ -155,7 +157,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             } else {
                 counting_indentation = false;
 
-                if indentation == 0 {
+                if indentation == 0 && c != '}' {
                     last_category = CharCategory::EndExpression;
                     append(i, last_category, indentation);
                 }
@@ -177,6 +179,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         if c == '/'
             && source.len() > i + 1
             && categorize_char(source[i + 1..].chars().next().unwrap()) == CharCategory::AlphaNum
+            && last_char != '<'
         {
             category = CharCategory::AlphaNum;
         }
@@ -207,12 +210,14 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             category = CharCategory::AlphaNum;
         }
 
-        if category == last_category && last_category != CharCategory::Bracket {
+        if category == last_category && last_category != CharCategory::Bracket && !(c == '<' || last_char == '>') {
+            last_char = c;
             continue;
         }
 
         append(i, last_category, indentation);
         last_category = category;
+        last_char = c;
     }
 
     append(source.len(), last_category, indentation);

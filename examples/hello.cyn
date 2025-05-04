@@ -24,7 +24,7 @@ bleh = if h == 7
 main =
 	println $h;
 	println "aaa";
-	println "b";
+	println $a;
 
 	blehs := 3;
 
@@ -44,3 +44,17 @@ main =
 
 # main = double 8
 
+a b = <h1 style="asdfhkuj" a=(ls)>
+    <div>
+        <belh />
+	<belhd>
+		asd
+	</belhd>
+        <belh />
+    </div>
+</h1>
+
+b = {
+    fucl: 2,
+    bleh: 3
+}

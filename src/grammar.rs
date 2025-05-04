@@ -44,6 +44,13 @@ pub enum Node {
     Scope(Box<Node>),
     Return(Box<Node>),
     Defer(Box<Node>),
+    MarkupBlock {
+        tag: String,
+        attributes: Vec<(String, Node)>,
+        body: Option<Box<Node>>,
+        siblings: Vec<Node>,
+    },
+    ObjectLiteral(Vec<(String, Node)>),
     Break,
     Continue,
 }
@@ -328,7 +335,10 @@ right_associtive_binary_infix_operator!(semicolon, semicolon_, lambda,
     {";", BinaryOperation::SemiColon}
 );
 
-fn lambda<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn lambda<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "λ") {
         let mut ts = &ts[1..];
 
@@ -360,7 +370,10 @@ fn lambda<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t,
     control_flow_statements(ts, ctx)
 }
 
-fn control_flow_statements<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn control_flow_statements<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "return") {
         let (ts, value) = lambda(&ts[1..], ctx)?;
         return Ok((ts, Node::Return(Box::new(value))));
@@ -382,7 +395,10 @@ fn control_flow_statements<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> R
     if_then_else(ts, ctx)
 }
 
-fn if_then_else<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn if_then_else<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "if") {
         ts = &ts[1..];
 
@@ -413,7 +429,10 @@ fn if_then_else<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(
     }
 }
 
-fn while_loop<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn while_loop<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "while") {
         ts = &ts[1..];
 
@@ -439,7 +458,10 @@ fn while_loop<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(To
     }
 }
 
-fn for_loop<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn for_loop<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "for") {
         ts = &ts[1..];
 
@@ -516,7 +538,10 @@ left_associtive_binary_infix_operator!(mul, mul_, unary_minus,
     {"//", BinaryOperation::Div}
 );
 
-fn unary_minus<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn unary_minus<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "-") {
         let (ts, n) = pow(&ts[1..], ctx)?;
         Ok((
@@ -541,7 +566,10 @@ left_associtive_binary_infix_operator!(range, _range, call,
     {"..=", BinaryOperation::RangeInclusive}
 );
 
-fn call<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn call<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     let Ok((ts, first)) = brackets(ts.clone(), ctx) else {
         return brackets(ts, ctx);
     };
@@ -567,7 +595,10 @@ fn call<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, '
     Ok((ts, first))
 }
 
-fn brackets<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn brackets<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "(") {
         let uncolosed_error = ParseError {
             message: "Expected `)`".to_string(),
@@ -596,7 +627,10 @@ fn brackets<'t, 's>(ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'
     }
 }
 
-fn array<'t, 's>(mut ts: Tokens<'t, 's>, ctx: ParsingContext) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+fn array<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "[") {
         let uncolosed_error = ParseError {
             message: "Expected `]`".to_string(),
@@ -644,6 +678,10 @@ fn scope<'t, 's>(
     ctx: ParsingContext,
 ) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
     if peek_and_compare(&ts, "{") {
+        if ts.len() >= 3 && ts[2].token == ":" {
+            return object_literal(ts, ctx);
+        }
+
         let uncolosed_error = ParseError {
             message: "Expected `}`".to_string(),
             range: ts[0].range,
@@ -669,8 +707,147 @@ fn scope<'t, 's>(
             Err(uncolosed_error)
         }
     } else {
-        literal(ts, ctx)
+        markup(ts, ctx)
     }
+}
+
+fn object_literal<'t, 's>(
+    mut ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+    expect_exact_token!("{", ts);
+
+    let mut items = vec![];
+
+    while !peek_and_compare(ts, "}") {
+        if !peek_and_compare_kind(ts, TokenKind::Word) {
+            return Err(ParseError {
+                message: "Expected object key".to_string(),
+                range: ts[0].range,
+            });
+        }
+
+        let name = ts[0].token.to_string();
+        ts = &ts[1..];
+
+        expect_exact_token!(":", ts);
+
+        let (new_ts, value) = lambda(
+            ts,
+            ParsingContext {
+                parsing_args: true,
+                ..ctx.clone()
+            },
+        )?;
+        ts = new_ts;
+
+        if peek_and_compare(ts, ",") {
+            ts = &ts[1..];
+        } else if !peek_and_compare(ts, "}") {
+            return Err(ParseError {
+                message: "Expected `}`".to_string(),
+                range: ts[0].range,
+            });
+        }
+
+        items.push((name, value));
+    }
+
+    Ok((&ts[1..], Node::ObjectLiteral(items)))
+}
+
+fn markup<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+    if peek_and_compare(&ts, "<") {
+        let ts = &ts[1..];
+
+        if peek_and_compare_kind(ts, TokenKind::Word) {
+            let tag = ts[0].token.to_string();
+
+            let mut ts = &ts[1..];
+
+            let mut attributes = vec![];
+
+            let mut self_closing = false;
+
+            while !peek_and_compare(ts, ">") {
+                if peek_and_compare(ts, "/>") {
+                    self_closing = true;
+                    break;
+                }
+
+                if ts.len() < 3 {
+                    return Err(ParseError {
+                        message: "Expected `>`".to_string(),
+                        range: (0, 0),
+                    });
+                }
+
+                let name = ts[0].token.to_string();
+                ts = &ts[1..];
+
+                expect_exact_token!("=", ts);
+
+                let (new_ts, value) = brackets(
+                    ts,
+                    ParsingContext {
+                        parsing_args: true,
+                        ..ctx.clone()
+                    },
+                )?;
+
+                ts = new_ts;
+
+                attributes.push((name, value));
+            }
+
+            ts = &ts[1..];
+
+            let mut body = None;
+
+            if !self_closing {
+                let (new_ts, body_) = lambda(
+                    &ts,
+                    ParsingContext {
+                        parsing_args: true,
+                        ..ctx.clone()
+                    },
+                )?;
+
+                ts = new_ts;
+                body = Some(Box::new(body_));
+
+                while peek_and_compare_kind(ts, TokenKind::ExpressionTerminator) {
+                    ts = &ts[1..];
+                }
+
+                expect_exact_token!("</", ts);
+                expect_exact_token!(&tag, ts);
+                expect_exact_token!(">", ts);
+            }
+
+            let mut siblings = vec![];
+        
+            while let Ok((new_ts, sibling)) = markup(ts, ctx) {
+                ts = new_ts;
+                siblings.push(sibling);
+            };
+
+            return Ok((
+                ts,
+                Node::MarkupBlock {
+                    tag,
+                    attributes,
+                    body,
+                    siblings,
+                },
+            ));
+        }
+    }
+
+    literal(ts, ctx)
 }
 
 fn literal<'t, 's>(

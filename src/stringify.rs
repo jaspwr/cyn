@@ -88,6 +88,38 @@ impl Node {
             Node::Continue => "continue".to_string(),
             Node::Defer(node) => "defer ".to_string() + &node.stringify(),
             Node::Scope(node) => format!("{{ {} }}", node.stringify()),
+            Node::MarkupBlock {
+                tag,
+                attributes,
+                body,
+                siblings, 
+            } => {
+                let attributes = attributes
+                    .iter()
+                    .map(|(k, v)| format!("{}={}", k, v.stringify()))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                let siblings = siblings
+                    .iter()
+                    .map(|s| s.stringify())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                if let Some(body) = body {
+                    format!("<{} {}>{}</{}>{}", tag, attributes, body.stringify(), tag, siblings)
+                } else {
+                    format!("<{} {}/>{}", tag, attributes, siblings)
+                }
+            }
+            Node::ObjectLiteral(vec) => {
+                let items = vec
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, v.stringify()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{{ {} }}", items)
+            }
         }
     }
 }
