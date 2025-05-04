@@ -14,6 +14,10 @@ pub mod stringify;
 pub mod builtins;
 pub mod heapless;
 
+// pub mod bytecode;
+// pub mod codegen;
+// pub mod types;
+
 fn main() {
     let mut state = interpreter::ExecutionState::new();
 
