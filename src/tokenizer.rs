@@ -40,7 +40,7 @@ fn categorize_char(c: char) -> CharCategory {
         _ => {}
     }
 
-    if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' {
+    if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '\\' {
         return CharCategory::AlphaNum;
     } else if c.is_whitespace() {
         return CharCategory::Whitespace;
@@ -210,7 +210,10 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             category = CharCategory::AlphaNum;
         }
 
-        if category == last_category && last_category != CharCategory::Bracket && !(c == '<' || last_char == '>') {
+        if category == last_category
+            && last_category != CharCategory::Bracket
+            && !(c == '<' || last_char == '>')
+        {
             last_char = c;
             continue;
         }
