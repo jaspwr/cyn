@@ -220,7 +220,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
         if category == last_category
             && last_category != CharCategory::Bracket
-            && !(c == '<' || last_char == '>')
+            && !(c == '<' && last_char == '>')
         {
             last_char = c;
             continue;
