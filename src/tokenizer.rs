@@ -184,6 +184,14 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             category = CharCategory::AlphaNum;
         }
 
+        // For windows drive letters
+        if c == ':'
+            && last_category == CharCategory::AlphaNum
+            && source.len() > i + 1
+            && source[i + 1..].chars().next().unwrap() == '\\' {
+            category = CharCategory::AlphaNum;
+        }
+
         // For range operator
         if c == '.'
             // Make sure that `..` at the start of paths still works
