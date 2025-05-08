@@ -489,7 +489,7 @@ pub fn eval(
                 }
                 grammar::BinaryOperation::WriteFile => {
                     let data = eval(*a, state, ctx.clone())?.as_string()?;
-                    let path = eval(*b, state, ctx.clone())?.as_string()?;
+                    let path = as_identifier_even_if_function_call(*b)?;
 
                     if let Err(e) = std::fs::write(path, data) {
                         return rte(format!("Failed to write file: {}", e));
