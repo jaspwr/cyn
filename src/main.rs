@@ -13,6 +13,7 @@ pub mod utils;
 pub mod stringify;
 pub mod builtins;
 pub mod heapless;
+pub mod path;
 
 // pub mod bytecode;
 // pub mod codegen;

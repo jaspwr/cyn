@@ -1,4 +1,7 @@
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     interpreter::{rte, RuntimeError, RuntimeState, Value},
@@ -136,7 +139,8 @@ fn ls(args: Vec<Value>) -> Result<Value, RuntimeError> {
             name
         });
 
-    let entries = dirs.chain(files)
+    let entries = dirs
+        .chain(files)
         .filter(|name| !(!all && name.chars().next() == Some('.')))
         .collect::<Vec<_>>()
         .join("\n");
@@ -160,6 +164,70 @@ fn mkdir(args: Vec<Value>) -> Result<Value, RuntimeError> {
     std::fs::create_dir(path_pathbuf).or(rte("Failed to create directory"))?;
 
     Ok(Value::Void)
+}
+
+fn mv(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let args = parse_args(args)?;
+
+    if args.files.len() != 2 {
+        return rte("Usage: mkdir <src> <dest>");
+    }
+
+    let from = PathBuf::from(args.files[0].clone());
+    if !from.exists() {
+        return rte("File not found");
+    }
+
+    let to = PathBuf::from(args.files[1].clone());
+
+    std::fs::rename(from, to).or(rte("Failed to rename file"))?;
+
+    Ok(Value::Void)
+}
+
+fn cp(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let args = parse_args(args)?;
+
+    if args.files.len() != 2 {
+        return rte("Usage: cp <src> <dest>");
+    }
+
+    let from = PathBuf::from(args.files[0].clone());
+    if !from.exists() {
+        return rte("File not found");
+    }
+
+    let to = PathBuf::from(args.files[1].clone());
+
+    if from.is_dir() {
+        copy_dir(&from, &to)?;
+        return Ok(Value::Void);
+    }
+
+    std::fs::copy(from, to).or(rte("Failed to copy file"))?;
+
+    Ok(Value::Void)
+}
+
+fn copy_dir(from: &Path, to: &Path) -> Result<(), RuntimeError> {
+    let entries = std::fs::read_dir(from).or(rte("Failed to read directory"))?;
+
+    std::fs::create_dir_all(&to).or(rte("Failed to create directory"))?;
+
+    for entry in entries {
+        let entry = entry.or(rte("Failed to read directory"))?;
+        let path = entry.path();
+
+        let dest = to.join(path.file_name().unwrap());
+
+        if path.is_dir() {
+            copy_dir(&path, &dest)?;
+        } else {
+            std::fs::copy(&path, &dest).or(rte("Failed to copy file"))?;
+        }
+    }
+
+    Ok(())
 }
 
 fn cat(args: Vec<Value>) -> Result<Value, RuntimeError> {
@@ -315,6 +383,8 @@ pub fn try_builtin(
         "mkcd" => mkcd(args, state),
         "touch" => touch(args),
         "rm" => rm(args),
+        "mv" => mv(args),
+        "cp" => cp(args),
         "echo" => echo(args),
         "sl" => Ok(Value::String(STEAM_LOCOMOTIVE.to_string())),
         _ => return None,
