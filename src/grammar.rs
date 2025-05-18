@@ -211,7 +211,7 @@ fn definition_list<'t, 's>(
     let mut nodes = vec![];
 
     loop {
-        let (new_ts, node) = match import(ts.clone(), ctx) {
+        let (new_ts, node) = match import(ts, ctx) {
             Ok((new_ts, node)) => (new_ts, node),
             Err(e) => {
                 if e.message == "Unexpected end of input" {
@@ -365,7 +365,7 @@ fn lambda<'t, 's>(
         let mut args = vec![];
 
         while let Ok((new_ts, arg)) = literal(
-            ts.clone(),
+            ts,
             ParsingContext {
                 parsing_args: true,
                 ..ctx.clone()
@@ -422,15 +422,15 @@ fn if_then_else<'t, 's>(
     if peek_and_compare(&ts, "if") {
         ts = &ts[1..];
 
-        let (mut ts, condition) = lambda(ts.clone(), ctx)?;
+        let (mut ts, condition) = lambda(ts, ctx)?;
 
         expect_exact_token!("then", ts);
 
-        let (mut ts, then_branch) = lambda(ts.clone(), ctx)?;
+        let (mut ts, then_branch) = lambda(ts, ctx)?;
 
         expect_exact_token!("else", ts);
 
-        let (mut ts, else_branch) = lambda(ts.clone(), ctx)?;
+        let (mut ts, else_branch) = lambda(ts, ctx)?;
 
         while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
             ts = &ts[1..];
@@ -567,7 +567,6 @@ fn custom_<'t, 's>(
     };
 
     if next.kind == TokenKind::Operator && !known_ops.contains(&next.token) {
-        println!("Unknown operator: {}", next.token);
         let (ts, rhs) = concat(&ts[1..], ctx)?;
         let this_oper_res = Node::BinaryOperation(
             BinaryOperation::Custom(next.token.to_string()),

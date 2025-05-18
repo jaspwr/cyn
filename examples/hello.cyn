@@ -42,9 +42,12 @@ main =
 	
 	println (2 => 4);
 
-	{
-		a: 2
-	}
+	poo := {
+		a: {b: 55},
+	};
+
+	poo.a = 4
+
 
 
 # main = double 8
@@ -66,3 +69,4 @@ b = {
 
 => a b = $a + $b + 2
 
+>>= x y = $x ** $y

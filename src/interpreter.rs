@@ -13,26 +13,64 @@ pub struct ExecutionState {
     functions: HashMap<String, Function>,
 }
 
-impl ExecutionState {
-    pub fn get_variable(&self, name: &String) -> Option<Value> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(value) = scope.variables.get(name) {
-                return Some(value.clone());
-            }
-        }
+fn access_object<'a>(obj: &'a mut Value, keys: &Vec<&str>) -> Result<&'a mut Value, RuntimeError> {
+    let mut current = obj;
 
-        None
+    for key in keys {
+        match current {
+            Value::Record(map) => {
+                if let Some(value) = map.get_mut(*key) {
+                    current = value;
+                } else {
+                    return rte(format!("Key {} not found in object", key));
+                }
+            }
+            _ => return rte(format!("{} is not an object", current.as_string()?)),
+        }
     }
 
-    fn assign_variable(&mut self, name: &String, value: Value) -> Option<Value> {
+    Ok(current)
+}
+
+impl ExecutionState {
+    pub fn get_variable(&mut self, name: &String) -> Result<Value, RuntimeError> {
+        let mut parts = name.split('.');
+        let name = parts.next().unwrap();
+        let parts = parts.collect::<Vec<_>>();
+
         for scope in self.scopes.iter_mut().rev() {
-            if scope.variables.contains_key(name) {
-                scope.variables.insert(name.clone(), value.clone());
-                return Some(value);
+            if let Some(value) = scope.variables.get_mut(name) {
+                if parts.is_empty() {
+                    return Ok(value.clone());
+                }
+
+                return Ok(access_object(value, &parts)?.clone());
             }
         }
 
-        None
+        rte(format!("Undefined identifier: {}", name))
+    }
+
+    fn assign_variable(&mut self, name: &String, value: Value) -> Result<Value, RuntimeError> {
+        let mut parts = name.split('.');
+        let name = parts.next().unwrap();
+        let parts = parts.collect::<Vec<_>>();
+
+        for scope in self.scopes.iter_mut().rev() {
+            if scope.variables.contains_key(name) {
+                if parts.is_empty() {
+                    scope.variables.insert(name.to_string(), value.clone());
+                    return Ok(value);
+                }
+
+                if let Some(obj) = scope.variables.get_mut(name) {
+                    *access_object(obj, &parts)? = value.clone();
+                    return Ok(value.clone());
+                }
+            }
+        }
+
+        rte(format!("Undefined identifier: {}", name))
     }
 }
 
@@ -416,7 +454,7 @@ pub fn eval(
         Node::String(s) => Value::String(s),
         Node::Indentifier(s) => {
             // println!("constants: {:#?} ........ {}", state, s);
-            if let Some(value) = state.get_variable(&s) {
+            if let Ok(value) = state.get_variable(&s) {
                 return Ok(value.clone());
             }
 
@@ -541,10 +579,7 @@ pub fn eval(
                         );
                     }
 
-                    return rte(format!(
-                        "Undefined operator: {}",
-                        operator
-                    ));
+                    return rte(format!("Undefined operator: {}", operator));
                 }
                 grammar::BinaryOperation::Range => {
                     let a = eval(*a, state, ctx.clone())?.as_int()?;
@@ -606,12 +641,9 @@ pub fn eval(
                 grammar::BinaryOperation::Assign => {
                     let name = as_identifier_even_if_function_call(*a)?;
                     let value = eval(*b, state, ctx.clone())?;
+                    println!("Assigning {} to {}", value.as_string()?, name);
 
-                    if let Some(value) = state.assign_variable(&name, value) {
-                        return Ok(value);
-                    }
-
-                    return rte(format!("Undefined identifier {}", name));
+                    state.assign_variable(&name, value)?
                 }
                 grammar::BinaryOperation::Declare => {
                     let name = as_identifier_even_if_function_call(*a)?;
@@ -629,9 +661,7 @@ pub fn eval(
                     let name = as_identifier_even_if_function_call(*a)?;
                     let value = eval(*b, state, ctx.clone())?;
 
-                    let Some(old_value) = state.get_variable(&name) else {
-                        return rte(format!("Undefined identifier {}", name));
-                    };
+                    let old_value = state.get_variable(&name)?;
 
                     let v1 = Node::String(old_value.as_string()?);
                     let v2 = Node::String(value.as_string()?);
@@ -639,7 +669,7 @@ pub fn eval(
 
                     let new_val = eval(node, state, ctx.clone())?;
 
-                    state.assign_variable(&name, new_val).unwrap()
+                    state.assign_variable(&name, new_val)?
                 }
             }
         }
@@ -675,7 +705,7 @@ pub fn eval(
                 return function.eval(args, state, ctx.clone());
             }
 
-            if let Some(value) = state.get_variable(&name) {
+            if let Ok(value) = state.get_variable(&name) {
                 return eval_lambda(value.clone(), args, state, ctx.clone());
             }
 
@@ -893,7 +923,7 @@ fn as_identifier_even_if_function_call(node: Node) -> Result<String, RuntimeErro
             if let Node::String(s) = *b {
                 s
             } else {
-                return rte("Ivalid indentifier".to_string());
+                return rte("Invalid indentifier".to_string());
             }
         }
         _ => return rte("Invalid identifier"),
