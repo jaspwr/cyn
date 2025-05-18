@@ -38,7 +38,11 @@ main =
 
 	for i in 0..20 do println $i;
 
-	println "c"
+	println "c";
+	
+	{
+		a: 2
+	}
 
 
 # main = double 8

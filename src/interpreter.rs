@@ -23,6 +23,17 @@ impl ExecutionState {
 
         None
     }
+
+    fn assign_variable(&mut self, name: &String, value: Value) -> Option<Value> {
+        for scope in self.scopes.iter_mut().rev() {
+            if scope.variables.contains_key(name) {
+                scope.variables.insert(name.clone(), value.clone());
+                return Some(value);
+            }
+        }
+
+        None
+    }
 }
 
 #[derive(Debug)]
@@ -261,6 +272,7 @@ pub enum Value {
         body: Box<Node>,
     },
     Array(Vec<Value>),
+    Record(HashMap<String, Value>),
 }
 
 impl Value {
@@ -285,6 +297,18 @@ impl Value {
             }
             Value::Bool(value) => if *value { "true" } else { "false" }.to_string(),
             Value::RangeGenerator { .. } => self.as_array()?.as_string()?,
+            Value::Record(map) => {
+                format!(
+                    "{{{}}}",
+                    map.iter()
+                        .map(|(k, v)| {
+                            let v = v.as_string().unwrap_or_default();
+                            format!("{}: {}", k, v)
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
         })
     }
 
@@ -564,11 +588,8 @@ pub fn eval(
                     let name = as_identifier_even_if_function_call(*a)?;
                     let value = eval(*b, state, ctx.clone())?;
 
-                    for scope in state.scopes.iter_mut().rev() {
-                        if scope.variables.contains_key(&name) {
-                            scope.variables.insert(name.clone(), value.clone());
-                            return Ok(value);
-                        } 
+                    if let Some(value) = state.assign_variable(&name, value) {
+                        return Ok(value);
                     }
 
                     return rte(format!("Undefined identifier {}", name));
@@ -599,14 +620,7 @@ pub fn eval(
 
                     let new_val = eval(node, state, ctx.clone())?;
 
-                    for scope in state.scopes.iter_mut().rev() {
-                        if scope.variables.contains_key(&name) {
-                            scope.variables.insert(name.clone(), new_val);
-                            return Ok(value);
-                        } 
-                    }
-
-                    panic!()
+                    state.assign_variable(&name, new_val).unwrap()
                 }
             }
         }
@@ -782,7 +796,15 @@ pub fn eval(
             body,
             siblings,
         } => todo!(),
-        Node::ObjectLiteral(vec) => todo!(),
+        Node::ObjectLiteral(members) => Value::Record(
+            members
+                .into_iter()
+                .map(|(k, v)| {
+                    let v = eval(v, state, ctx.clone())?;
+                    Ok((k, v))
+                })
+                .collect::<Result<HashMap<_, _>, _>>()?,
+        ),
     })
 }
 
