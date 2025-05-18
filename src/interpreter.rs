@@ -565,6 +565,8 @@ pub fn eval(
                     }
                 }
                 grammar::BinaryOperation::Custom(operator) => {
+                    println!("{:?}", a);
+                    println!("{:?}", b);
                     let a = eval(*a, state, ctx.clone())?;
                     let b = eval(*b, state, ctx.clone())?;
 
@@ -659,13 +661,9 @@ pub fn eval(
                 }
                 grammar::BinaryOperation::AssignAnd(operation) => {
                     let name = as_identifier_even_if_function_call(*a)?;
-                    let value = eval(*b, state, ctx.clone())?;
 
-                    let old_value = state.get_variable(&name)?;
-
-                    let v1 = Node::String(old_value.as_string()?);
-                    let v2 = Node::String(value.as_string()?);
-                    let node = Node::BinaryOperation(*operation, Box::new(v1), Box::new(v2));
+                    let v1 = Node::Indentifier(name.clone());
+                    let node = Node::BinaryOperation(*operation, Box::new(v1), b);
 
                     let new_val = eval(node, state, ctx.clone())?;
 
