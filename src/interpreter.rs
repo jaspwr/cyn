@@ -8,9 +8,33 @@ use crate::{
 
 #[derive(Debug)]
 pub struct ExecutionState {
-    pub variables: HashMap<String, Value>,
+    pub scopes: Vec<Scope>,
     pub runtime_state: RuntimeState,
     functions: HashMap<String, Function>,
+}
+
+impl ExecutionState {
+    pub fn get_variable(&self, name: &String) -> Option<Value> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(value) = scope.variables.get(name) {
+                return Some(value.clone());
+            }
+        }
+
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct Scope {
+    pub variables: HashMap<String, Value>,
+}
+impl Scope {
+    fn new() -> Self {
+        Self {
+            variables: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -76,11 +100,13 @@ impl Function {
             });
         }
 
-        let previous_constants = state.variables.clone();
+        let mut scope = Scope::new();
 
         for (arg, value) in self.args.iter().zip(args.iter()) {
-            state.variables.insert(arg.clone(), value.clone());
+            scope.variables.insert(arg.clone(), value.clone());
         }
+
+        state.scopes.push(scope);
 
         let mut ret = eval(*self.body.clone(), state, ctx.clone()).map_err(|e| {
             let mut new_e = e.clone();
@@ -88,7 +114,7 @@ impl Function {
             new_e
         })?;
 
-        state.variables = previous_constants;
+        let _ = state.scopes.pop();
 
         let leftover = args.into_iter().skip(self.args.len()).collect::<Vec<_>>();
 
@@ -114,13 +140,13 @@ fn eval_lambda(
         body,
     } = lambda
     {
-        let previous_constants = state.variables.clone();
+        let mut scope = Scope::new();
 
         for (arg, value) in args_names.iter().zip(arg_values.into_iter()) {
-            state.variables.insert(arg.clone(), value.clone());
+            scope.variables.insert(arg.clone(), value.clone());
         }
 
-        state.variables.extend(captured);
+        state.scopes.push(scope);
 
         let ret = eval(*body, state, ctx.clone()).map_err(|e| {
             let mut new_e = e.clone();
@@ -128,7 +154,7 @@ fn eval_lambda(
             new_e
         })?;
 
-        state.variables = previous_constants;
+        let _ = state.scopes.pop();
 
         return Ok(ret);
     } else {
@@ -203,7 +229,7 @@ impl ExecutionState {
     pub fn new() -> Self {
         Self {
             functions: HashMap::new(),
-            variables: HashMap::new(),
+            scopes: vec![],
             runtime_state: RuntimeState::new(),
         }
     }
@@ -366,7 +392,7 @@ pub fn eval(
         Node::String(s) => Value::String(s),
         Node::Indentifier(s) => {
             // println!("constants: {:#?} ........ {}", state, s);
-            if let Some(value) = state.variables.get(&s) {
+            if let Some(value) = state.get_variable(&s) {
                 return Ok(value.clone());
             }
 
@@ -536,22 +562,26 @@ pub fn eval(
                 }
                 grammar::BinaryOperation::Assign => {
                     let name = as_identifier_even_if_function_call(*a)?;
-
-                    if !state.variables.contains_key(&name) {
-                        return rte(format!("Undefined indentifer {}", name));
-                    }
-
                     let value = eval(*b, state, ctx.clone())?;
 
-                    state.variables.insert(name, value.clone());
+                    for scope in state.scopes.iter_mut().rev() {
+                        if scope.variables.contains_key(&name) {
+                            scope.variables.insert(name.clone(), value.clone());
+                            return Ok(value);
+                        } 
+                    }
 
-                    return Ok(value);
+                    return rte(format!("Undefined identifier {}", name));
                 }
                 grammar::BinaryOperation::Declare => {
                     let name = as_identifier_even_if_function_call(*a)?;
                     let value = eval(*b, state, ctx.clone())?;
 
-                    state.variables.insert(name, value.clone());
+                    if let Some(scope) = state.scopes.last_mut() {
+                        scope.variables.insert(name.clone(), value.clone());
+                    } else {
+                        return rte(format!("Cannot declare `{}` in this context.", name));
+                    }
 
                     return Ok(value);
                 }
@@ -559,23 +589,24 @@ pub fn eval(
                     let name = as_identifier_even_if_function_call(*a)?;
                     let value = eval(*b, state, ctx.clone())?;
 
-                    let Some(old_value) = state.variables.get(&name).cloned() else {
+                    let Some(old_value) = state.get_variable(&name) else {
                         return rte(format!("Undefined identifier {}", name));
                     };
 
                     let v1 = Node::String(old_value.as_string()?);
                     let v2 = Node::String(value.as_string()?);
-                    let node = Node::BinaryOperation(
-                        *operation,
-                        Box::new(v1),
-                        Box::new(v2),
-                    );
+                    let node = Node::BinaryOperation(*operation, Box::new(v1), Box::new(v2));
 
                     let new_val = eval(node, state, ctx.clone())?;
 
-                    state.variables.insert(name, new_val.clone());
+                    for scope in state.scopes.iter_mut().rev() {
+                        if scope.variables.contains_key(&name) {
+                            scope.variables.insert(name.clone(), new_val);
+                            return Ok(value);
+                        } 
+                    }
 
-                    return Ok(new_val);
+                    panic!()
                 }
             }
         }
@@ -611,7 +642,7 @@ pub fn eval(
                 return function.eval(args, state, ctx.clone());
             }
 
-            if let Some(value) = state.variables.get(&name) {
+            if let Some(value) = state.get_variable(&name) {
                 return eval_lambda(value.clone(), args, state, ctx.clone());
             }
 
@@ -665,7 +696,7 @@ pub fn eval(
             Value::Lambda {
                 args,
                 // TODO: only use values that are used in the body
-                captured: state.variables.clone(),
+                captured: HashMap::new(),
                 body,
             }
         }
@@ -680,11 +711,17 @@ pub fn eval(
             then_branch,
             else_branch,
         } => {
-            if eval(*condition, state, ctx.clone())?.as_bool()? {
+            state.scopes.push(Scope::new());
+
+            let v = if eval(*condition, state, ctx.clone())?.as_bool()? {
                 eval(*then_branch, state, ctx.clone())?
             } else {
                 eval(*else_branch, state, ctx.clone())?
-            }
+            };
+
+            let _ = state.scopes.pop();
+
+            v
         }
         Node::Import { qualified, path } => {
             let path = eval(*path, state, ctx.clone())?.as_string()?;
@@ -699,7 +736,9 @@ pub fn eval(
             let mut values = Vec::with_capacity(10);
 
             while eval(*condition.clone(), state, ctx.clone())?.as_bool()? {
+                state.scopes.push(Scope::new());
                 values.push(eval(*body.clone(), state, ctx.clone())?);
+                let _ = state.scopes.pop();
             }
 
             Value::Array(values)
@@ -707,18 +746,24 @@ pub fn eval(
         Node::For { var, range, body } => {
             let mut values = Vec::with_capacity(10);
 
-            let previous_constants = state.variables.clone();
+            state.scopes.push(Scope::new());
 
             let var = as_identifier_even_if_function_call(*var)?;
 
             if let Value::Array(arr) = eval(*range.clone(), state, ctx.clone())?.as_array()? {
                 for value in arr.into_iter() {
-                    state.variables.insert(var.clone(), value.clone());
+                    state
+                        .scopes
+                        .last_mut()
+                        .unwrap()
+                        .variables
+                        .insert(var.clone(), value.clone());
+
                     values.push(eval(*body.clone(), state, ctx.clone())?);
                 }
             }
 
-            state.variables = previous_constants;
+            let _ = state.scopes.pop();
 
             Value::Array(values)
         }
@@ -727,12 +772,16 @@ pub fn eval(
         Node::Continue => todo!(),
         Node::Defer(node) => todo!(),
         Node::Scope(node) => {
-            
             let ret = eval(*node, state, ctx.clone())?;
 
             ret
-        },
-        Node::MarkupBlock { tag, attributes, body, siblings } => todo!(),
+        }
+        Node::MarkupBlock {
+            tag,
+            attributes,
+            body,
+            siblings,
+        } => todo!(),
         Node::ObjectLiteral(vec) => todo!(),
     })
 }

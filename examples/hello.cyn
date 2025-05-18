@@ -20,7 +20,6 @@ bleh = if h == 7
 
 # main = runOn (λa -> $a * 2) 16
 
-
 main =
 	println $h;
 	println "aaa";
@@ -33,7 +32,7 @@ main =
 		println $blehs
 	};
 
-    if $h == 16
+	if $h == 16
 		then println "h is 8"
 		else println "h is not 8";
 
