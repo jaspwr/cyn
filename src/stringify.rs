@@ -147,7 +147,7 @@ impl BinaryOperation {
             BinaryOperation::WriteFile => ">>".to_string(),
             BinaryOperation::EnvAssign => "$=".to_string(),
             BinaryOperation::SemiColon => ";".to_string(),
-            BinaryOperation::Custon(s) => s.clone(),
+            BinaryOperation::Custom(s) => s.clone(),
             BinaryOperation::Assign => "=".to_string(),
             BinaryOperation::Declare => ":=".to_string(),
             BinaryOperation::AssignAnd(binary_operation) => {

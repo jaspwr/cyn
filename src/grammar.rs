@@ -93,7 +93,7 @@ pub enum BinaryOperation {
     EnvAssign,
     Pipe,
     SemiColon,
-    Custon(String),
+    Custom(String),
 }
 
 #[derive(Debug, Clone)]
@@ -281,21 +281,41 @@ fn import<'s, 't>(
     assignment(ts, ctx)
 }
 
-fn assignment<'t, 's>(
+fn function_assignment_name<'t, 's>(
     ts: Tokens<'t, 's>,
     ctx: ParsingContext,
-) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
-    if let Ok((mut ts, name)) = literal(
-        ts.clone(),
+) -> Option<(Tokens<'t, 's>, Ast)> {
+    if let Ok((ts, name)) = literal(
+        ts,
         ParsingContext {
             parsing_args: true,
             ..ctx.clone()
         },
     ) {
+        return Some((ts, name));
+    }
+
+    if let Some(next) = peek(ts) {
+        if next.kind == TokenKind::Operator {
+            return Some((
+                &ts[1..],
+                Node::Indentifier(next.token.to_string()),
+            ));
+        }
+    }
+
+    None
+}
+
+fn assignment<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+    if let Some((mut ts, name)) = function_assignment_name(ts, ctx) {
         let mut args = vec![];
 
         while let Ok((new_ts, arg)) = literal(
-            ts.clone(),
+            ts,
             ParsingContext {
                 parsing_args: true,
                 ..ctx.clone()
@@ -516,13 +536,51 @@ right_associtive_binary_infix_operator!(bool_ops, _bool_ops, eq,
     {"||", BinaryOperation::Or}
 );
 
-left_associtive_binary_infix_operator!(eq, eq_, concat,
+left_associtive_binary_infix_operator!(eq, eq_, custom,
     {"==", BinaryOperation::Eq},
     {"<", BinaryOperation::Lt},
     {">", BinaryOperation::Gt},
     {">=", BinaryOperation::Gte},
     {"<=", BinaryOperation::Lte}
 );
+
+fn custom<'t, 's>(
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+    let (ts, lhs) = concat(ts, ctx)?;
+    custom_(lhs, ts, ctx)
+}
+fn custom_<'t, 's>(
+    lhs: Ast,
+    ts: Tokens<'t, 's>,
+    ctx: ParsingContext,
+) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
+    let known_ops = vec![
+        "==", "<", ">", "<=", ">=", "&&", "||", "++", "//", "!!", "=", ":=", "+=", "-=", "*=",
+        "//=", "&&=", "||=", "++=", "**=", "+", "-", "*", "$=", "**", "|", "..", "..=", "->", "λ",
+        ",", ";", "</",
+    ];
+
+    let Some(next) = peek(ts) else {
+        return Ok((ts, lhs));
+    };
+
+    if next.kind == TokenKind::Operator && !known_ops.contains(&next.token) {
+        println!("Unknown operator: {}", next.token);
+        let (ts, rhs) = concat(&ts[1..], ctx)?;
+        let this_oper_res = Node::BinaryOperation(
+            BinaryOperation::Custom(next.token.to_string()),
+            Box::new(lhs),
+            Box::new(rhs),
+        );
+        if let Ok(r) = custom_(this_oper_res.clone(), ts, ctx) {
+            return Ok(r);
+        }
+        return Ok((ts, this_oper_res));
+    }
+    Ok((ts, lhs))
+}
 
 left_associtive_binary_infix_operator!(concat, concat_, add,
     {"++", BinaryOperation::Concat}
@@ -829,11 +887,11 @@ fn markup<'t, 's>(
             }
 
             let mut siblings = vec![];
-        
+
             while let Ok((new_ts, sibling)) = markup(ts, ctx) {
                 ts = new_ts;
                 siblings.push(sibling);
-            };
+            }
 
             return Ok((
                 ts,

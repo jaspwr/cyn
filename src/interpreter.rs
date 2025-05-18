@@ -526,7 +526,26 @@ pub fn eval(
                         panic!();
                     }
                 }
-                grammar::BinaryOperation::Custon(_) => todo!(),
+                grammar::BinaryOperation::Custom(operator) => {
+                    let a = eval(*a, state, ctx.clone())?;
+                    let b = eval(*b, state, ctx.clone())?;
+
+                    if let Some(function) = state.functions.get(&operator).cloned() {
+                        return function.eval(
+                            vec![a, b],
+                            state,
+                            ExecutionContext {
+                                piped: true,
+                                ..ctx.clone()
+                            },
+                        );
+                    }
+
+                    return rte(format!(
+                        "Undefined operator: {}",
+                        operator
+                    ));
+                }
                 grammar::BinaryOperation::Range => {
                     let a = eval(*a, state, ctx.clone())?.as_int()?;
                     let b = eval(*b, state, ctx.clone())?.as_int()?;
@@ -813,6 +832,9 @@ pub fn load_module(
     qualified: bool,
     state: &mut ExecutionState,
 ) -> Result<Value, RuntimeError> {
+    // TODO: remove
+    let qualified = false;
+
     let Some(module) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else {
         return rte(format!(
             "Module in {} didn't have a valid name.",
