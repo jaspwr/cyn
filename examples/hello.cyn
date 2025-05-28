@@ -42,11 +42,11 @@ main =
 	
 	println (2 => 4);
 
-	poo := {
+	obj := {
 		a: {b: 55},
 	};
 
-	poo.a = 4
+	obj.a = 4
 
 
 
