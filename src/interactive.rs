@@ -99,15 +99,15 @@ pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
                 println!("{}", message);
             }
             Err(ReadlineError::Interrupted) => {
-                println!("CTRL-C");
-                break;
+                // println!("CTRL-C");
+                // break;
             }
             Err(ReadlineError::Eof) => {
-                println!("CTRL-D");
-                break;
+                // println!("CTRL-D");
+                // break;
             }
             Err(err) => {
-                println!("Error: {:?}", err);
+                println!("Terminal Error: {:?}", err);
                 break;
             }
         }
