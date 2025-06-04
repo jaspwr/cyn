@@ -350,7 +350,7 @@ impl Value {
         })
     }
 
-    fn as_double(&self) -> Result<f64, RuntimeError> {
+    pub fn as_double(&self) -> Result<f64, RuntimeError> {
         match self {
             Value::Double(d) => Ok(*d),
             Value::Integer(i) => Ok(*i as f64),
@@ -364,7 +364,7 @@ impl Value {
         }
     }
 
-    fn as_int(&self) -> Result<i64, RuntimeError> {
+    pub fn as_int(&self) -> Result<i64, RuntimeError> {
         match self {
             Value::Integer(d) => Ok(*d),
             _ => self.as_string().and_then(|s| {

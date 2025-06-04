@@ -387,6 +387,7 @@ pub fn try_builtin(
         "cp" => cp(args),
         "echo" => echo(args),
         "sl" => Ok(Value::String(STEAM_LOCOMOTIVE.to_string())),
+        "exit" => std::process::exit(args.get(0).and_then(|v| v.as_int().ok()).unwrap_or(0) as i32),
         _ => return None,
     })
 }

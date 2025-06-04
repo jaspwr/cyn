@@ -1,6 +1,7 @@
 # This is the first cyn program.
+# This is not a well structured example I am using this for testing.
 
-h = ((2 + 2) * $double 2)#prints 8
+h = ((2 + 2) * $double 2) #prints 16
 double $x = $x * 2
 
 $add $a $b = 
