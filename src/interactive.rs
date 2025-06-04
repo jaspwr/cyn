@@ -32,7 +32,7 @@ impl Highlighter for MyHelper {
     fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
         &'s self,
         prompt: &'p str,
-        default: bool,
+        _default: bool,
     ) -> Cow<'b, str> {
         Owned(prompt.bold().to_string())
     }
@@ -52,7 +52,6 @@ impl Highlighter for MyHelper {
 
 pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
     let mut rl = DefaultEditor::new()?;
-    let _ = rl.load_history("history.txt");
 
     println!(
         "  ....  .... ... .. ...  
@@ -79,6 +78,19 @@ pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
     rl.set_helper(Some(h));
     rl.bind_sequence(KeyEvent::alt('l'), Cmd::Insert(1, "λ".to_string()));
 
+    let mut history_path = None;
+
+    if let Ok(Some(home)) = homedir::my_home() {
+        let history = home.join(".cynhistory");
+        history_path = Some(history);
+        if history_path.as_ref().unwrap().exists() {
+            rl.load_history(history_path.as_ref().unwrap())
+                .unwrap_or_else(|_| {
+                    eprintln!("Could not load history from .cynhistory");
+                });
+        }
+    }
+
     loop {
         let readline = rl.readline(prompt(&state).as_str());
         match readline {
@@ -97,6 +109,12 @@ pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
                 }
 
                 println!("{}", message);
+
+                if let Some(history_path) = history_path.as_ref() {
+                    if let Err(e) = rl.save_history(history_path) {
+                        eprintln!("Could not save history to .cynhistory: {:?}", e);
+                    }
+                }
             }
             Err(ReadlineError::Interrupted) => {
                 // println!("CTRL-C");
@@ -113,7 +131,12 @@ pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
         }
     }
 
-    let _ = rl.save_history("history.txt");
+    if let Some(history_path) = history_path.as_ref() {
+        if let Err(e) = rl.save_history(history_path) {
+            eprintln!("Could not save history to .cynhistory: {:?}", e);
+        }
+    }
+
     Ok(())
 }
 
