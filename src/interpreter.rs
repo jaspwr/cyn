@@ -1,4 +1,5 @@
 use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
+use command_group::CommandGroup;
 
 use crate::{
     builtins::try_builtin,
@@ -238,13 +239,13 @@ fn eval_as_command(
         cmd.stdin(std::process::Stdio::inherit());
     }
 
-    let cmd = cmd.spawn();
+    let cmd = cmd.group_spawn();
 
     if let Err(e) = cmd {
         return rte(format!("Failed to execute command {}: {}", name, e));
     }
 
-    let mut child = cmd.unwrap();
+    let mut child = cmd.unwrap().into_inner();
 
     if let Some(piped_input) = ctx.piped_input {
         let stdin = child.stdin.as_mut().unwrap();

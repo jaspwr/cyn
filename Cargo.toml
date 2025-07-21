@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+command-group = "5.0.1"
 homedir = "0.3.4"
 owo-colors = "4.2.0"
 rustyline = { version = "15.0.0", features = ["derive"] }

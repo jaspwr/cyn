@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ptr::null_mut};
+use std::fmt::Debug;
 
 use crate::interpreter::RuntimeError;
 

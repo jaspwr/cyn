@@ -42,17 +42,17 @@ fn main() {
 
         let tokens = tokenizer::tokenize(&source);
 
-        println!("tokens: {:#?}", tokens);
+        // println!("tokens: {:#?}", tokens);
 
         let ast = grammar::parse(&tokens);
 
-        println!("ast: {:#?}", ast);
+        // println!("ast: {:#?}", ast);
 
         if let Ok(ast) = ast {
             let _ = interpreter::eval(ast, &mut state, ExecutionContext::new());
 
             let result = state.run_main(vec![]);
-            println!("result: {:#?}", result);
+            // println!("result: {:#?}", result);
         }
     } else {
         let _ = start_interactive(state);

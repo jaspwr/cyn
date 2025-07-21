@@ -456,11 +456,11 @@ fn while_loop<'t, 's>(
     if peek_and_compare(&ts, "while") {
         ts = &ts[1..];
 
-        let (mut ts, condition) = lambda(ts.clone(), ctx)?;
+        let (mut ts, condition) = lambda(ts, ctx)?;
 
         expect_exact_token!("do", ts);
 
-        let (mut ts, body) = lambda(ts.clone(), ctx)?;
+        let (mut ts, body) = lambda(ts, ctx)?;
 
         while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
             ts = &ts[1..];
@@ -485,15 +485,15 @@ fn for_loop<'t, 's>(
     if peek_and_compare(&ts, "for") {
         ts = &ts[1..];
 
-        let (mut ts, var) = brackets(ts.clone(), ctx)?;
+        let (mut ts, var) = brackets(ts, ctx)?;
 
         expect_exact_token!("in", ts);
 
-        let (mut ts, range) = lambda(ts.clone(), ctx)?;
+        let (mut ts, range) = lambda(ts, ctx)?;
 
         expect_exact_token!("do", ts);
 
-        let (mut ts, body) = lambda(ts.clone(), ctx)?;
+        let (mut ts, body) = lambda(ts, ctx)?;
 
         while peek_and_compare_kind(&ts, TokenKind::ExpressionTerminator) {
             ts = &ts[1..];
@@ -627,15 +627,15 @@ fn call<'t, 's>(
     ts: Tokens<'t, 's>,
     ctx: ParsingContext,
 ) -> Result<(Tokens<'t, 's>, Ast), ParseError> {
-    let Ok((ts, first)) = brackets(ts.clone(), ctx) else {
+    let Ok((ts, first)) = brackets(ts, ctx) else {
         return brackets(ts, ctx);
     };
 
     let mut args = vec![];
 
-    let mut fn_ts = ts.clone();
+    let mut fn_ts = ts;
     while let Ok((new_ts, arg)) = brackets(
-        fn_ts.clone(),
+        fn_ts,
         ParsingContext {
             parsing_args: true,
             ..ctx.clone()
@@ -699,7 +699,7 @@ fn array<'t, 's>(
         let mut items = vec![];
 
         while let Ok((new_ts, item)) = lambda(
-            ts.clone(),
+            ts,
             ParsingContext {
                 parsing_args: false,
                 ..ctx.clone()
@@ -747,7 +747,7 @@ fn scope<'t, 's>(
         ts = &ts[1..];
 
         let (ts, body) = semicolon(
-            ts.clone(),
+            ts,
             ParsingContext {
                 parsing_args: false,
                 ..ctx.clone()

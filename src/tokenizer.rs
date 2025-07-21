@@ -30,8 +30,8 @@ enum CharCategory {
 
 fn categorize_char(c: char) -> CharCategory {
     match c {
-        '+' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | '~' | 'λ' | '>' | '<' | '@' | ','
-        | '?' | ':' | ';' | '$' => {
+        '+' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | 'λ' | '>' | '<' | '@' | ',' | '.'
+        | '?' | ':' | ';' | '$' | '-' => {
             return CharCategory::Operator;
         }
         '(' | ')' | '{' | '}' | '[' | ']' => {
@@ -40,13 +40,20 @@ fn categorize_char(c: char) -> CharCategory {
         _ => {}
     }
 
-    if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '\\' {
+    if c.is_alphanumeric() || c == '_' {
         return CharCategory::AlphaNum;
     } else if c.is_whitespace() {
         return CharCategory::Whitespace;
     }
 
     CharCategory::None
+}
+
+fn path_char(c: char) -> bool {
+    match c {
+        '~' | '.' | '/' | '\\' => true,
+        _ => false,
+    }
 }
 
 pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
@@ -65,9 +72,18 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
         let token = &source[token_start..i];
 
         let kind = match last_category {
-            CharCategory::AlphaNum => Some(TokenKind::Word),
+            CharCategory::AlphaNum | CharCategory::Operator => Some(
+                if token
+                    .chars()
+                    .all(|c| categorize_char(c) == CharCategory::Operator)
+                    && !token.chars().all(path_char)
+                {
+                    TokenKind::Operator
+                } else {
+                    TokenKind::Word
+                },
+            ),
             CharCategory::StringLiteral => Some(TokenKind::QuotedString),
-            CharCategory::Operator => Some(TokenKind::Operator),
             CharCategory::Bracket => Some(TokenKind::Bracket),
             CharCategory::Whitespace => None,
             CharCategory::EndExpression => Some(TokenKind::ExpressionTerminator),
@@ -87,8 +103,6 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
                 | "true" | "false" | "for" | "in" | "return" | "break" | "continue" | "defer" => {
                     kind = TokenKind::Keyword
                 }
-                "-" => kind = TokenKind::Operator, // minus is allowed in identifiers; convert back
-                // if alone
                 _ => {}
             };
 
@@ -168,42 +182,42 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
 
         let mut category = categorize_char(c);
 
-        if c == '-'
-            && source.len() > i + 1
-            && categorize_char(source[i + 1..].chars().next().unwrap()) == CharCategory::Operator
-        {
-            category = CharCategory::Operator;
-        }
+        // if c == '-'
+        //     && source.len() > i + 1
+        //     && categorize_char(source[i + 1..].chars().next().unwrap()) == CharCategory::Operator
+        // {
+        //     category = CharCategory::Operator;
+        // }
 
-        // For paths
-        if c == '/'
-            && source.len() > i + 1
-            && categorize_char(source[i + 1..].chars().next().unwrap()) == CharCategory::AlphaNum
-            && last_char != '<'
-        {
-            category = CharCategory::AlphaNum;
-        }
-
-        // For windows drive letters
-        if c == ':'
-            && last_category == CharCategory::AlphaNum
-            && source.len() > i + 1
-            && source[i + 1..].chars().next().unwrap() == '\\' {
-            category = CharCategory::AlphaNum;
-        }
-
-        // For range operator
-        if c == '.'
-            // Make sure that `..` at the start of paths still works
-            && (last_category == CharCategory::AlphaNum || last_category == CharCategory::Bracket)
-            && source.len() > i + 1
-            && source[i + 1..].chars().next().unwrap() == '.'
-        {
-            category = CharCategory::Operator;
-        }
-        if c == '.' && last_category == CharCategory::Operator {
-            category = CharCategory::Operator;
-        }
+        // // For paths
+        // if c == '/'
+        //     && source.len() > i + 1
+        //     && categorize_char(source[i + 1..].chars().next().unwrap()) == CharCategory::AlphaNum
+        //     && last_char != '<'
+        // {
+        //     category = CharCategory::AlphaNum;
+        // }
+        //
+        // // For windows drive letters
+        // if c == ':'
+        //     && last_category == CharCategory::AlphaNum
+        //     && source.len() > i + 1
+        //     && source[i + 1..].chars().next().unwrap() == '\\' {
+        //     category = CharCategory::AlphaNum;
+        // }
+        //
+        // // For range operator
+        // if c == '.'
+        //     // Make sure that `..` at the start of paths still works
+        //     && (last_category == CharCategory::AlphaNum || last_category == CharCategory::Bracket)
+        //     && source.len() > i + 1
+        //     && source[i + 1..].chars().next().unwrap() == '.'
+        // {
+        //     category = CharCategory::Operator;
+        // }
+        // if c == '.' && last_category == CharCategory::Operator {
+        //     category = CharCategory::Operator;
+        // }
 
         // Allow prime in identifiers. E.g. `x'` or `x''`
         if c == '\'' && last_category == CharCategory::AlphaNum {
@@ -218,9 +232,18 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             category = CharCategory::AlphaNum;
         }
 
-        if category == last_category
+        let compare_cat = |category: CharCategory| -> CharCategory {
+            if category == CharCategory::Operator {
+                CharCategory::AlphaNum
+            } else {
+                category
+            }
+        };
+
+        if (compare_cat(category) == compare_cat(last_category))
             && last_category != CharCategory::Bracket
             && !(c == '<' && last_char == '>')
+            && last_char != 'λ'
         {
             last_char = c;
             continue;

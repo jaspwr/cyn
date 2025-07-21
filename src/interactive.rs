@@ -51,7 +51,7 @@ impl Highlighter for MyHelper {
 }
 
 pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
-    let mut rl = DefaultEditor::new()?;
+    // let rl = DefaultEditor::new()?;
 
     println!(
         "  ....  .... ... .. ...  
@@ -117,11 +117,11 @@ pub fn start_interactive(mut state: interpreter::ExecutionState) -> Result<()> {
                 }
             }
             Err(ReadlineError::Interrupted) => {
-                // println!("CTRL-C");
+                println!("CTRL-C");
                 // break;
             }
             Err(ReadlineError::Eof) => {
-                // println!("CTRL-D");
+                println!("CTRL-D");
                 // break;
             }
             Err(err) => {
