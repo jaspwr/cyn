@@ -1,10 +1,11 @@
-use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
 use command_group::CommandGroup;
+use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
 
 use crate::{
     builtins::try_builtin,
     grammar::{self, Node},
-    heapless, tokenizer,
+    heapless,
+    tokenizer::{self, path_char},
 };
 
 #[derive(Debug)]
@@ -94,14 +95,12 @@ struct Function {
     body: Box<Node>,
     owned_functions: Vec<Function>,
     owner: Option<String>,
-    function_prefix: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ExecutionContext {
     pub piped: bool,
     pub piped_input: Option<String>,
-    pub function_prefix: Option<String>,
 }
 
 impl ExecutionContext {
@@ -109,16 +108,11 @@ impl ExecutionContext {
         Self {
             piped: false,
             piped_input: None,
-            function_prefix: None,
         }
     }
 
     pub fn function_name(&self, name: String) -> String {
-        if let Some(prefix) = &self.function_prefix {
-            format!("{}.{}", prefix, name)
-        } else {
-            name
-        }
+        name
     }
 }
 
@@ -129,11 +123,6 @@ impl Function {
         state: &mut ExecutionState,
         ctx: ExecutionContext,
     ) -> Result<Value, RuntimeError> {
-        let ctx = ExecutionContext {
-            function_prefix: self.function_prefix.clone(),
-            ..ctx.clone()
-        };
-
         if self.args.len() > args.len() {
             // Curry!
 
@@ -297,6 +286,7 @@ impl ExecutionState {
 #[derive(Debug, Clone)]
 pub enum Value {
     Void,
+    Char(char),
     String(String),
     Double(f64),
     Integer(i64),
@@ -327,6 +317,14 @@ impl Value {
                 format!("λ{} -> {}", args, (*body).stringify())
             }
             Value::Array(items) => {
+                if items.iter().all(|i| i.is_char()) {
+                    return Ok(items
+                        .iter()
+                        .map(|item| item.as_string())
+                        .collect::<Result<Vec<_>, _>>()?
+                        .join(""));
+                }
+
                 let items = items
                     .iter()
                     .map(|item| item.as_string())
@@ -348,6 +346,7 @@ impl Value {
                         .join(", ")
                 )
             }
+            Value::Char(c) => c.to_string(),
         })
     }
 
@@ -381,9 +380,7 @@ impl Value {
     pub fn as_array(&self) -> Result<Value, RuntimeError> {
         match self {
             Value::Array(arr) => Ok(Value::Array(arr.clone())),
-            Value::String(s) => Ok(Value::Array(
-                s.chars().map(|c| Value::String(c.to_string())).collect(),
-            )),
+            Value::String(s) => Ok(Value::Array(s.chars().map(|c| Value::Char(c)).collect())),
             Value::RangeGenerator { start, end } => {
                 let mut arr = Vec::new();
                 for i in *start..*end {
@@ -407,6 +404,14 @@ impl Value {
                     rte(format!("Recieved {}. expected bool", s))
                 }
             }),
+        }
+    }
+
+    pub fn is_char(&self) -> bool {
+        if let Self::Char(_) = self {
+            true
+        } else {
+            false
         }
     }
 }
@@ -566,8 +571,6 @@ pub fn eval(
                     }
                 }
                 grammar::BinaryOperation::Custom(operator) => {
-                    println!("{:?}", a);
-                    println!("{:?}", b);
                     let a = eval(*a, state, ctx.clone())?;
                     let b = eval(*b, state, ctx.clone())?;
 
@@ -644,7 +647,7 @@ pub fn eval(
                 grammar::BinaryOperation::Assign => {
                     let name = as_identifier_even_if_function_call(*a)?;
                     let value = eval(*b, state, ctx.clone())?;
-                    println!("Assigning {} to {}", value.as_string()?, name);
+                    // println!("Assigning {} to {}", value.as_string()?, name);
 
                     state.assign_variable(&name, value)?
                 }
@@ -720,9 +723,16 @@ pub fn eval(
             name,
             args,
             body,
-            where_definitions,
+            where_definitions: _,
         } => {
             let name = ctx.function_name(as_identifier(*name)?);
+
+            if name.chars().all(path_char) {
+                return rte(format!(
+                    "Cannot define operator \'{}\' as this needs to be interperted as a path.",
+                    name
+                ));
+            }
 
             let args = args
                 .into_iter()
@@ -733,7 +743,6 @@ pub fn eval(
                 name: name.clone(),
                 args,
                 body,
-                function_prefix: ctx.function_prefix.clone(),
                 owned_functions: vec![],
                 owner: None,
             };
@@ -858,7 +867,7 @@ pub fn eval(
 
 pub fn load_module(
     path: PathBuf,
-    qualified: bool,
+    _qualified: bool,
     state: &mut ExecutionState,
 ) -> Result<Value, RuntimeError> {
     // TODO: remove
@@ -876,10 +885,10 @@ pub fn load_module(
 
     let tokens = tokenizer::tokenize(&source);
 
-    let mut ctx = ExecutionContext::new();
+    let ctx = ExecutionContext::new();
 
     if qualified {
-        ctx.function_prefix = Some(module);
+        // ctx.function_prefix = Some(module);
     }
 
     match grammar::parse(&tokens) {
@@ -895,10 +904,10 @@ pub fn load_module(
 }
 
 fn range(
-    state: &mut ExecutionState,
+    _state: &mut ExecutionState,
     a: i64,
     b: i64,
-    ctx: ExecutionContext,
+    _ctx: ExecutionContext,
 ) -> Result<Value, RuntimeError> {
     if a > b {
         return rte(format!("Invalid range: {}..{}", a, b));
@@ -929,9 +938,9 @@ fn as_identifier_even_if_function_call(node: Node) -> Result<String, RuntimeErro
     })
 }
 
-fn as_string(node: Node) -> Result<String, RuntimeError> {
-    match node {
-        Node::String(s) => Ok(s),
-        _ => rte("Invalid identifier"),
-    }
-}
+// fn as_string(node: Node) -> Result<String, RuntimeError> {
+//     match node {
+//         Node::String(s) => Ok(s),
+//         _ => rte("Invalid identifier"),
+//     }
+// }

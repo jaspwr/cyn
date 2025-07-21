@@ -6,7 +6,11 @@ use crate::{
     tokenizer,
 };
 
-pub fn eval_string(source: &str, state: &mut ExecutionState, ctx: ExecutionContext) -> Result<Value, RuntimeError> {
+pub fn eval_string(
+    source: &str,
+    state: &mut ExecutionState,
+    ctx: ExecutionContext,
+) -> Result<Value, RuntimeError> {
     let tokens = tokenizer::tokenize(source);
     // println!("tokens: {:#?}", tokens);
 

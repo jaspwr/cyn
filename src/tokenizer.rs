@@ -23,6 +23,7 @@ enum CharCategory {
     EndExpression,
     AlphaNum,
     Operator,
+    Punct,
     Bracket,
     Whitespace,
     StringLiteral,
@@ -30,9 +31,12 @@ enum CharCategory {
 
 fn categorize_char(c: char) -> CharCategory {
     match c {
-        '+' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | 'λ' | '>' | '<' | '@' | ',' | '.'
-        | '?' | ':' | ';' | '$' | '-' => {
+        '+' | '*' | '/' | '%' | '=' | '!' | '&' | '|' | '^' | 'λ' | '>' | '<' | '@' | '.'
+        | '?' | ':' | '$' | '-' | '\\' => {
             return CharCategory::Operator;
+        }
+        ',' | ';' => {
+            return CharCategory::Punct;
         }
         '(' | ')' | '{' | '}' | '[' | ']' => {
             return CharCategory::Bracket;
@@ -49,7 +53,7 @@ fn categorize_char(c: char) -> CharCategory {
     CharCategory::None
 }
 
-fn path_char(c: char) -> bool {
+pub fn path_char(c: char) -> bool {
     match c {
         '~' | '.' | '/' | '\\' => true,
         _ => false,
@@ -87,6 +91,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
             CharCategory::Bracket => Some(TokenKind::Bracket),
             CharCategory::Whitespace => None,
             CharCategory::EndExpression => Some(TokenKind::ExpressionTerminator),
+            CharCategory::Punct => Some(TokenKind::Operator),
             CharCategory::None => None,
         };
 
@@ -118,7 +123,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
     };
 
     let mut indentation = 0;
-    let mut last_indentation = 0;
+    // let mut last_indentation = 0;
     let mut counting_indentation = true;
     let mut in_string_literal = false;
 
@@ -176,7 +181,7 @@ pub fn tokenize<'src>(source: &'src str) -> Vec<Token<'src>> {
                     append(i, last_category, indentation);
                 }
 
-                last_indentation = indentation;
+                // last_indentation = indentation;
             }
         }
 

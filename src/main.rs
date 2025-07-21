@@ -22,10 +22,7 @@ pub mod path;
 fn main() {
     let mut state = interpreter::ExecutionState::new();
 
-    eval_string(include_str!("../std.cyn"), &mut state, ExecutionContext {
-        function_prefix: Some("std".to_string()),
-        ..ExecutionContext::new()
-    }).unwrap();
+    eval_string(include_str!("../std.cyn"), &mut state, ExecutionContext::new()).unwrap();
 
     if let Ok(Some(home)) = my_home() {
         let cynrc = home.join(".cynrc");
@@ -42,17 +39,17 @@ fn main() {
 
         let tokens = tokenizer::tokenize(&source);
 
-        // println!("tokens: {:#?}", tokens);
+        println!("tokens: {:#?}", tokens);
 
         let ast = grammar::parse(&tokens);
 
-        // println!("ast: {:#?}", ast);
+        println!("ast: {:#?}", ast);
 
         if let Ok(ast) = ast {
             let _ = interpreter::eval(ast, &mut state, ExecutionContext::new());
 
             let result = state.run_main(vec![]);
-            // println!("result: {:#?}", result);
+            println!("result: {:#?}", result);
         }
     } else {
         let _ = start_interactive(state);

@@ -24,7 +24,7 @@ bleh = if h == 7
 main =
 	println $h;
 	println "aaa";
-	println $a;
+	println 4;
 
 	blehs := 3;
 
@@ -44,7 +44,7 @@ main =
 	println (2 => 4);
 
 	obj := {
-		a: {b: 55},
+		a : {b : 55},
 	};
 
 	obj.a = 4
@@ -53,19 +53,9 @@ main =
 
 # main = double 8
 
-a b = <h1 style="asdfhkuj" a=(ls)>
-    <div>
-        <belh />
-	<belhd>
-		asd
-	</belhd>
-        <belh />
-    </div>
-</h1>
-
 b = {
-    fucl: 2,
-    bleh: 3
+    fucl : 2,
+    bleh : 3
 }
 
 => a b = $a + $b + 2

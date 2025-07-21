@@ -41,7 +41,7 @@ reduce' acc f arr i = if $i == len $arr
     then $acc
     else reduce' ($f $acc ($arr !! $i)) $f $arr ($i + 1)
 
-id x = x
+id x = $x
 
 add x y = $x + $y
 sub x y = $x - $y
