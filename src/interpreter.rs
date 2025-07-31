@@ -185,6 +185,10 @@ fn eval_lambda(
             scope.variables.insert(arg.clone(), value.clone());
         }
 
+        for (arg, value) in captured {
+            scope.variables.insert(arg.clone(), value.clone());
+        }
+
         state.scopes.push(scope);
 
         let ret = eval(*body, state, ctx.clone()).map_err(|e| {
