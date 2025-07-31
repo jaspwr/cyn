@@ -158,6 +158,7 @@ impl Function {
         let leftover = args.into_iter().skip(self.args.len()).collect::<Vec<_>>();
 
         if !leftover.is_empty() {
+            println!("this");
             ret = eval_lambda(ret, leftover, state, ctx.clone())?;
         }
 
@@ -200,6 +201,8 @@ fn eval_lambda(
         let _ = state.scopes.pop();
 
         return Ok(ret);
+    } else if let Value::String(s) = lambda {
+        return eval_as_command(s, arg_values, ctx);
     } else {
         return rte(format!("Can not evaluate `{}`", lambda.as_string()?));
     }
