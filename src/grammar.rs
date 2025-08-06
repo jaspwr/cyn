@@ -297,10 +297,7 @@ fn function_assignment_name<'t, 's>(
 
     if let Some(next) = peek(ts) {
         if next.kind == TokenKind::Operator {
-            return Some((
-                &ts[1..],
-                Node::Indentifier(next.token.to_string()),
-            ));
+            return Some((&ts[1..], Node::Indentifier(next.token.to_string())));
         }
     }
 
@@ -619,8 +616,8 @@ left_associtive_binary_infix_operator!(index, index_, range,
 );
 
 left_associtive_binary_infix_operator!(range, _range, call,
-    {"..", BinaryOperation::Range},
-    {"..=", BinaryOperation::RangeInclusive}
+    {"<>", BinaryOperation::Range},
+    {"<>=", BinaryOperation::RangeInclusive}
 );
 
 fn call<'t, 's>(
@@ -929,28 +926,16 @@ fn literal<'t, 's>(
         if token.kind == TokenKind::Word || token.kind == TokenKind::QuotedString {
             let mut node = Node::String(token.token.to_string());
 
-            if token
-                .token
-                .chars()
-                .next()
-                .map(|c| c.is_numeric())
-                .unwrap_or(false)
-            {
-                // TODO: better parsing
-                if let Ok(value) = token.token.parse() {
-                    node = Node::DoubleLiteral(value);
-                }
-            }
+            let first_char = token.token.chars().next();
 
-            if token
-                .token
-                .chars()
-                .next()
-                .map(|c| c == '$')
-                .unwrap_or(false)
-            {
+            if first_char == Some('$') {
                 if token.token.len() > 1 {
                     node = Node::Indentifier(token.token[1..].to_string());
+                }
+            } else if first_char.map(|c| c.is_digit(10)).unwrap_or(false) {
+                // TODO: parse ints and hex literals and stuff
+                if let Ok(value) = token.token.parse() {
+                    node = Node::DoubleLiteral(value);
                 }
             } else {
                 if !ctx.parsing_args

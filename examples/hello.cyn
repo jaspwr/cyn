@@ -37,7 +37,7 @@ main =
 		then println "h is 8"
 		else println "h is not 8";
 
-	for i in 0..20 do println $i;
+	for i in 0 <> 20 do println $i;
 
 	println "c";
 	
@@ -50,11 +50,10 @@ main =
 	obj.a = 4
 
 
-
 # main = double 8
 
 b = {
-    fucl : 2,
+    asd : 2,
     bleh : 3
 }
 

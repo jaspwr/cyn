@@ -385,6 +385,13 @@ pub fn try_builtin(
         "rm" => rm(args),
         "mv" => mv(args),
         "cp" => cp(args),
+        "str" => Ok(Value::String(
+            args.into_iter()
+                .map(|a| a.as_string())
+                .collect::<Result<Vec<String>, _>>()
+                .unwrap()
+                .join(" "),
+        )),
         "echo" => echo(args),
         "sl" => Ok(Value::String(STEAM_LOCOMOTIVE.to_string())),
         "exit" => std::process::exit(args.get(0).and_then(|v| v.as_int().ok()).unwrap_or(0) as i32),
