@@ -826,7 +826,11 @@ pub fn eval(
 
             state.scopes.push(Scope::new());
 
-            let var = as_identifier_even_if_function_call(*var)?;
+            let var = if let Some(var) = var {
+                as_identifier_even_if_function_call(*var)?
+            } else {
+                "it".to_string()
+            };
 
             if let Value::Array(arr) = eval(*range.clone(), state, ctx.clone())?.as_array()? {
                 for value in arr.into_iter() {

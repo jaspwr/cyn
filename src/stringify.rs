@@ -76,12 +76,16 @@ impl Node {
                 format!("(while {} do {})", condition.stringify(), body.stringify())
             }
             Node::For { var, range, body } => {
-                format!(
-                    "(for {} in {} do {})",
-                    var.stringify(),
-                    range.stringify(),
-                    body.stringify()
-                )
+                if let Some(var) = var {
+                    format!(
+                        "(for {} in {} do {})",
+                        var.stringify(),
+                        range.stringify(),
+                        body.stringify()
+                    )
+                } else {
+                    format!("(for {} do {})", range.stringify(), body.stringify())
+                }
             }
             Node::Return(node) => "return ".to_string() + &node.stringify(),
             Node::Break => "break".to_string(),
@@ -92,7 +96,7 @@ impl Node {
                 tag,
                 attributes,
                 body,
-                siblings, 
+                siblings,
             } => {
                 let attributes = attributes
                     .iter()
@@ -107,7 +111,14 @@ impl Node {
                     .join(" ");
 
                 if let Some(body) = body {
-                    format!("<{} {}>{}</{}>{}", tag, attributes, body.stringify(), tag, siblings)
+                    format!(
+                        "<{} {}>{}</{}>{}",
+                        tag,
+                        attributes,
+                        body.stringify(),
+                        tag,
+                        siblings
+                    )
                 } else {
                     format!("<{} {}/>{}", tag, attributes, siblings)
                 }

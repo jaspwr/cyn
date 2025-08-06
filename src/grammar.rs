@@ -32,7 +32,7 @@ pub enum Node {
         body: Box<Node>,
     },
     For {
-        var: Box<Node>,
+        var: Option<Box<Node>>,
         range: Box<Node>,
         body: Box<Node>,
     },
@@ -482,11 +482,19 @@ fn for_loop<'t, 's>(
     if peek_and_compare(&ts, "for") {
         ts = &ts[1..];
 
-        let (mut ts, var) = brackets(ts, ctx)?;
+        let (mut ts, first) = lambda(ts, ctx)?;
 
-        expect_exact_token!("in", ts);
+        let (var, range) = if peek_and_compare(&ts, "in") {
+            ts = &ts[1..];
 
-        let (mut ts, range) = lambda(ts, ctx)?;
+            let (new_ts, second) = lambda(ts, ctx)?;
+
+            ts = new_ts;
+
+            (Some(Box::new(first)), Box::new(second))
+        } else {
+            (None, Box::new(first))
+        };
 
         expect_exact_token!("do", ts);
 
@@ -499,8 +507,8 @@ fn for_loop<'t, 's>(
         return Ok((
             ts,
             Node::For {
-                var: Box::new(var),
-                range: Box::new(range),
+                var,
+                range,
                 body: Box::new(body),
             },
         ));
